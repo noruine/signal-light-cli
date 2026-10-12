@@ -17,7 +17,7 @@ public enum CLIExitCode: Int32, Sendable {
     case config = 78
 }
 
-/// The one error type every command throws. `SignalLightCli.main` catches it
+/// The one error type every command throws. `SignalLightCLI.main` catches it
 /// at the top level, prints `message` to stderr, and exits with `exitCode` —
 /// commands themselves never call `exit(_:)` directly.
 public struct CLIError: Error, CustomStringConvertible {

@@ -141,7 +141,7 @@ enum HooksAgentSupport {
             executableDirectory: Bundle.main.executableURL?.deletingLastPathComponent()
         ) else {
             throw CLIError(
-                "找不到 signal-light-hooks。先运行 swift build --product signal-light-hooks，并把它和 signal-light 放在同一个 .build 目录。",
+                "没有找到 signal-light-hooks。请运行 swift build --product signal-light-hooks，并把它和 signal-light 放在同一个 .build 目录。",
                 exitCode: .noInput
             )
         }

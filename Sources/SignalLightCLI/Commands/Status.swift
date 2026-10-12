@@ -110,7 +110,7 @@ struct StatusSnapshot {
             terminal.out("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
         }
 
-        terminal.out("    日志      \(displayPath(paths.logURL))")
+        terminal.out("    日志      \(PathText.abbreviated(paths.logURL))")
     }
 
     /// One compact line for the interactive menu's header: service state, the
@@ -166,11 +166,6 @@ struct StatusSnapshot {
 
     /// Abbreviates against the home `SignalLightDaemonPaths` resolves (which
     /// honors `$HOME`), so printed paths match the ones scripts use.
-    private func displayPath(_ url: URL) -> String {
-        let home = paths.home.path
-        return url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path
-    }
-
     private var serviceDescription: String {
         if let pid = jobInfo.pid {
             return "运行中 (PID \(pid)，开机自启：\(runAtLoad == true ? "是" : "否"))"

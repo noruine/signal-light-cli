@@ -28,6 +28,9 @@ public struct ClaudeHookInstallationStatus: Equatable, Sendable {
     }
 }
 
+/// `@unchecked`: everything stored here is immutable except
+/// `FileManager`, which Foundation treats as thread-safe for these
+/// operations.
 public final class ClaudeHookInstallationManager: @unchecked Sendable {
     public let claudeDirectory: URL
     public let managedHooksBinaryURL: URL

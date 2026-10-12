@@ -62,7 +62,7 @@ public struct LaunchAgentControl {
     public func setAutostart(_ enabled: Bool) throws {
         let binaryPath = installedBinaryPath() ?? paths.binURL.path
         guard FileManager.default.fileExists(atPath: binaryPath) else {
-            throw CLIError("还没装，请先运行 signal-light install。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"), exitCode: .noInput)
         }
         try writePlist(binaryPath: binaryPath, runAtLoad: enabled)
     }
@@ -111,7 +111,7 @@ public struct LaunchAgentControl {
 
     public func bootstrap() throws {
         guard FileManager.default.fileExists(atPath: paths.launchAgentPlistURL.path) else {
-            throw CLIError("服务还没登记，请先运行 signal-light service start。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "服务还没登记，请运行 signal-light service start。", menu: "服务还没登记。"), exitCode: .noInput)
         }
         try runChecked(["bootstrap", domainTarget, paths.launchAgentPlistURL.path], failureContext: "启动服务失败")
     }

@@ -60,14 +60,15 @@ hardware.
 
 ## Conventions
 
-- Swift 6 language mode with strict concurrency. Prefer actors and value types;
-  `@unchecked Sendable` stays rare and always carries the invariant that makes
-  it safe.
+- Swift 6 language mode with strict concurrency. Prefer actors and value
+  types; `@unchecked Sendable` needs a stated reason — a named lock, queue
+  or actor, or a stored type that is itself thread-safe.
 - User-facing copy is standard, natural Chinese; the 了 particle is banned
-  outside 不了 / 为了 / 除了, and `make lint` enforces it. Output states facts
-  and never asks for a keypress it does not need.
-- Public kit API gets a one-line doc comment; internals do not need ceremony.
-- New behavior lands with tests for the paths it actually runs in.
+  outside 不了 / 为了 / 除了 (`make lint` enforces it). One vocabulary for
+  results: 已X for a finished action, X完成 for a finished flow, X失败 for a
+  failed one, 无法X for an environment limit, 已取消X for a cancel. A cancel
+  says one line and returns; only output worth reading asks for a keypress.
+- Results go to stdout, progress and warnings to stderr, so pipes stay clean.
 
 ## Git
 

@@ -98,8 +98,15 @@ public struct Terminal: Sendable {
     }
 
     /// stderr: a fatal error message (the process is expected to exit non-zero after this).
+    /// stderr: a failure, prefixed with `error:` — except inside the menu,
+    /// which is a guided page rather than a shell and would read the label as
+    /// the terminal itself breaking.
     public func errorLine(_ text: String) {
-        writeStderr(useColor ? "\(failure("error:")) \(text)" : "error: \(text)")
+        if CLIRuntimeContext.isMenuSession {
+            writeStderr(useColor ? failure(text) : text)
+        } else {
+            writeStderr(useColor ? "\(failure("error:")) \(text)" : "error: \(text)")
+        }
     }
 
     private func writeStderr(_ text: String) {

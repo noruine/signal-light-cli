@@ -1,6 +1,6 @@
 import Foundation
 
-/// Single source of truth for every filesystem path `SignalLightCli` creates.
+/// Single source of truth for every filesystem path `SignalLightCLI` creates.
 /// `install`/`uninstall`/`audit` all derive their file lists from this type so
 /// cleanup can never drift out of sync with what was actually written.
 ///
@@ -49,7 +49,7 @@ public struct SignalLightDaemonPaths: Sendable {
 
     /// The installed, user-facing binary is named `signal-light` — the actual
     /// command people type — even though the Swift build product is
-    /// `SignalLightCli` (matching this repo's PascalCase target-naming
+    /// `SignalLightCLI` (matching this repo's PascalCase target-naming
     /// convention: `signal-light-hooks`, the App, …). `install` copies
     /// the build product here under this shorter name.
     public var binURL: URL {

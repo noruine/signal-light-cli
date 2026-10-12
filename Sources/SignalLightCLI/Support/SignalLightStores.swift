@@ -14,7 +14,7 @@ enum SignalLightStores {
             return try SignalLightSettingsStore.load(from: url)
         } catch {
             throw CLIError(
-                "灯效配置读取失败（文件可能已损坏）。可以运行 signal-light config reset 恢复默认。",
+                ContextText.choose(cli: "灯效配置读取失败（文件可能已损坏）。可以运行 signal-light config reset 恢复默认。", menu: "灯效配置读取失败（文件可能已损坏）。"),
                 exitCode: .config
             )
         }

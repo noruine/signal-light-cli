@@ -21,7 +21,7 @@ struct Calibrate: AsyncParsableCommand {
 
         guard let device = try SignalLightStores.loadPairedDevice(from: paths.deviceJSONURL),
               let deviceID = UUID(uuidString: device.identifier) else {
-            throw CLIError("还没配对，请先运行 signal-light pair。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
         }
 
         let control = LaunchAgentControl(paths: paths)
@@ -32,7 +32,7 @@ struct Calibrate: AsyncParsableCommand {
 
     private func runCalibration(terminal: Terminal, deviceID: UUID) async throws {
         let session = SignalLightBLESession(pairedDeviceID: deviceID)
-        terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连灯…")
+        terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
         try await session.connect()
         defer { session.disconnect() }
 
@@ -44,7 +44,7 @@ struct Calibrate: AsyncParsableCommand {
         }
 
         terminal.out("")
-        terminal.out("会逐个点亮引脚，你看灯、报颜色就行。")
+        terminal.out("会逐个点亮引脚，请观察灯的颜色并回答。")
         guard Confirm.promptYesNo(terminal, "开始接线校准？", defaultAnswer: true) else {
             CancelNotice.say("已取消。", terminal: terminal)
             return
@@ -57,7 +57,7 @@ struct Calibrate: AsyncParsableCommand {
             terminal.out("")
             terminal.out("GPIO \(pin)（还差：\(remaining)）")
             try await session.sendCommand(SignalLightControlCommand.pinTest(pin: pin, on: true))
-            terminal.progress("GPIO \(pin) 已通电，看灯。")
+            terminal.progress("GPIO \(pin) 已通电，请观察。")
 
             let observation = promptObservation()
             try await session.sendCommand(SignalLightControlCommand.pinTest(pin: pin, on: false))
@@ -97,7 +97,7 @@ struct Calibrate: AsyncParsableCommand {
               let yellow = wizard.mapping[.yellow],
               let green = wizard.mapping[.green] else {
             terminal.out("")
-            terminal.warn("三色没有配齐，未保存。想重来：signal-light calibrate")
+            terminal.warn("三色没有配齐，未保存。重新校准：signal-light calibrate")
             return
         }
 
@@ -119,7 +119,7 @@ struct Calibrate: AsyncParsableCommand {
     /// just add noise. Enter / Space / n mean "nothing lit"; Esc (or Ctrl-C)
     /// cancels the whole calibration and records nothing.
     private func promptObservation() -> SignalLightWizardObservation? {
-        FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 没亮，Esc 取消：".utf8))
+        FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮，Esc 取消：".utf8))
 
         guard let original = RawMode.enter() else {
             let line = readLine(strippingNewline: true)?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""

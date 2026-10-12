@@ -48,7 +48,7 @@ struct Firmware: AsyncParsableCommand {
 
             guard let device = try SignalLightStores.loadPairedDevice(from: paths.deviceJSONURL),
                   let deviceID = UUID(uuidString: device.identifier) else {
-                throw CLIError("还没配对，请先运行 signal-light pair。", exitCode: .noInput)
+                throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
             }
 
             // Checked before anything is paused or connected: a script that
@@ -79,7 +79,7 @@ struct Firmware: AsyncParsableCommand {
 
         private func runUpdate(terminal: Terminal, deviceID: UUID) async throws {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
-            terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连灯…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
             try await session.connect()
             defer { session.disconnect() }
 
@@ -102,7 +102,7 @@ struct Firmware: AsyncParsableCommand {
                 }
             }
             guard let data = try? Data(contentsOf: firmware.url), !data.isEmpty else {
-                throw CLIError("无法读取这个固件文件：\(firmware.url.path)", exitCode: .noInput)
+                throw CLIError("读取固件文件失败：\(firmware.url.path)", exitCode: .noInput)
             }
             terminal.out("固件大小：\(data.count) 字节")
 
@@ -194,7 +194,7 @@ struct Firmware: AsyncParsableCommand {
                     }
                 }
 
-                terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("固件升级成功，设备将自动重启生效。"))")
+                terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("固件已升级，设备将自动重启生效。"))")
             } catch UserCancellation.cancelled {
                 try? await session.sendControl("OTA_ABORT")
                 CancelNotice.say("已取消升级。", terminal: terminal)

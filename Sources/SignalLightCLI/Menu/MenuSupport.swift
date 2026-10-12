@@ -201,7 +201,7 @@ enum MenuCommandRunner {
     @discardableResult
     static func run(_ arguments: [String], terminal: Terminal) async -> Bool {
         do {
-            var command = try SignalLightCli.parseAsRoot(arguments)
+            var command = try SignalLightCLI.parseAsRoot(arguments)
             if var asyncCommand = command as? AsyncParsableCommand {
                 try await asyncCommand.run()
             } else {

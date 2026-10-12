@@ -24,6 +24,7 @@ signal-light                # 不带参数进交互菜单
 
 | 命令 | 作用 |
 | --- | --- |
+| `install` / `uninstall` | 安装到本机 / 卸载（可一并移除 Agent 钩子） |
 | `pair` / `unpair` | 配对红绿灯 / 忘掉已配对设备（会先停服务） |
 | `service start\|stop\|restart\|autostart` | 后台服务与开机自启 |
 | `hooks install\|status\|uninstall` | 接入 / 查看 / 移除 Claude Code、Codex 钩子 |

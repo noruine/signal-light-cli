@@ -69,7 +69,7 @@ enum PairFlow {
 
         guard !discovered.isEmpty else {
             throw CLIError(
-                "未找到信号灯。请确认设备已通电、距离不太远，或延长扫描时间：signal-light pair --timeout 120",
+                "没有找到信号灯。请确认设备已通电、距离不太远，或延长扫描时间：signal-light pair --timeout 120",
                 exitCode: .unavailable
             )
         }
@@ -82,7 +82,7 @@ enum PairFlow {
         let paired = SignalLightPairedDevice(name: chosen.name, identifier: chosen.id.uuidString)
         try SignalLightDeviceStore.save(paired, to: paths.deviceJSONURL)
 
-        terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("配对成功：\(chosen.name)。"))")
+        terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已配对 “\(chosen.name)”。"))")
         // A running daemon resolved its device at startup, so a re-pair only
         // takes effect after a restart — say so, or the light silently keeps
         // driving the old hardware.
@@ -93,7 +93,10 @@ enum PairFlow {
         } else if !CLIRuntimeContext.isMenuSession {
             // In a guided menu session the menu offers the next step
             // interactively; only the bare-CLI path needs the typed hint.
-            terminal.progress("    接下来：signal-light service start 启动服务")
+            terminal.progress(ContextText.choose(
+                cli: "    服务还没启动：运行 signal-light service start",
+                menu: "    服务还没启动。"
+            ))
         }
     }
 

@@ -13,7 +13,7 @@ enum ConfigMenu {
             terminal: terminal,
             header: {
                 terminal.out("\(terminal.emoji(CLIGlyph.effect))灯效设置")
-                terminal.out(terminal.dimmed("选个状态改它怎么亮，改完能直接在灯上看效果。"))
+                terminal.out(terminal.dimmed("选择状态并调整灯效，改动可直接在灯上预览。"))
                 terminal.out("")
             },
             buildItems: {
@@ -43,7 +43,7 @@ enum ConfigMenu {
 
     private static func editBucket(_ bucket: SignalLightBucket, paths: SignalLightDaemonPaths, terminal: Terminal) async {
         guard let settings = try? SignalLightSettingsStore.load(from: paths.settingsJSONURL) else {
-            terminal.errorLine("读取灯效配置失败。")
+            terminal.errorLine("灯效配置读取失败。")
             return
         }
         let current = settings.effect(for: bucket)
@@ -138,12 +138,12 @@ enum ConfigMenu {
         do {
             try await DaemonPause.run(terminal: terminal, control: control) {
                 let session = SignalLightBLESession(pairedDeviceID: deviceID)
-                terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连灯预览…")
+                terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯预览…")
                 try await session.connect()
                 defer { session.disconnect() }
 
                 try await session.sendCommand(SignalLightCommandEncoder.encode(effect))
-                terminal.out("已发到灯上，看一眼实体灯。")
+                terminal.out("已发到灯上。")
                 MenuPrompt.pause(terminal, message: "按回车结束预览")
                 try? await session.sendCommand(SignalLightControlCommand.off)
             }

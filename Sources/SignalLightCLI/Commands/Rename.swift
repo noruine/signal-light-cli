@@ -18,13 +18,13 @@ struct Rename: AsyncParsableCommand {
 
         guard let device = try SignalLightStores.loadPairedDevice(from: paths.deviceJSONURL),
               let deviceID = UUID(uuidString: device.identifier) else {
-            throw CLIError("还没配对，请先运行 signal-light pair。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
         }
 
         let control = LaunchAgentControl(paths: paths)
         try await DaemonPause.run(terminal: terminal, control: control) {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
-            terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连灯…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
             try await session.connect()
             defer { session.disconnect() }
 
@@ -50,7 +50,7 @@ struct Rename: AsyncParsableCommand {
     ) async throws {
         terminal.out("新名称：\(newName)")
         if terminal.isInteractive {
-            guard Confirm.promptYesNo(terminal, "改完设备会自己重启，确认？", defaultAnswer: false) else {
+            guard Confirm.promptYesNo(terminal, "设备将自动重启，确认？", defaultAnswer: false) else {
                 terminal.out("已取消。")
                 return
             }
@@ -70,9 +70,9 @@ struct Rename: AsyncParsableCommand {
         try? SignalLightDeviceStore.save(updated, to: paths.deviceJSONURL)
 
         if confirmed {
-            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已改好，设备正在重启。"))")
+            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已修改，设备正在重启。"))")
         } else {
-            terminal.out("\(terminal.emoji(CLIGlyph.success))指令已发出，设备重启后就是 “\(newName)”。")
+            terminal.out("\(terminal.emoji(CLIGlyph.success))指令已发出，设备重启后名称变为 “\(newName)”。")
         }
     }
 }

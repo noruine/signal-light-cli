@@ -7,7 +7,7 @@ enum DiagnosticsMenu {
             terminal: terminal,
             header: {
                 terminal.out("\(terminal.emoji(CLIGlyph.doctor))诊断")
-                terminal.out(terminal.dimmed("哪儿不对先体检，日志能看出服务在忙什么。"))
+                terminal.out(terminal.dimmed("先体检定位问题，日志记录服务运行情况。"))
                 terminal.out("")
             },
             buildItems: {

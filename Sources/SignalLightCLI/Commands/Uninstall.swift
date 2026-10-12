@@ -55,13 +55,13 @@ struct Uninstall: AsyncParsableCommand {
             paths.binURL, paths.hooksBinaryURL, paths.deviceJSONURL,
             paths.stateJSONURL, paths.settingsJSONURL, paths.logURL,
         ]
-        if removedDirs.contains(paths.cliRootDir.path)
+        if removedDirs.contains(PathText.abbreviated(paths.cliRootDir))
             || removedDirs.contains(paths.binDir.path)
             || cliFiles.contains(where: { removedPaths.contains($0.path) }) {
-            terminal.progress("    • 移除 \(paths.cliRootDir.path)（程序、配置、日志、hooks 二进制副本）")
+            terminal.progress("    • 移除 \(PathText.abbreviated(paths.cliRootDir))（程序、配置、日志、hooks 二进制副本）")
         }
-        if removedPaths.contains(paths.pathSymlinkURL.path) {
-            terminal.progress("    • 移除 \(paths.pathSymlinkURL.path)（PATH 快捷命令；\(paths.pathSymlinkDir.path) 本身不动）")
+        if removedPaths.contains(PathText.abbreviated(paths.pathSymlinkURL)) {
+            terminal.progress("    • 移除 \(PathText.abbreviated(paths.pathSymlinkURL))（PATH 快捷命令；\(PathText.abbreviated(paths.pathSymlinkDir)) 本身不动）")
         }
         if removedPaths.contains(paths.launchAgentPlistURL.path) {
             terminal.progress("    • 移除 LaunchAgent 配置")
@@ -73,13 +73,13 @@ struct Uninstall: AsyncParsableCommand {
         // deliberately left alone — that's somebody else's to own while it
         // runs, and it must not make this uninstall look unfinished.
         for socket in report.liveSockets {
-            terminal.progress("    • 保留 socket（别的程序在用）：\(socket.path)")
+            terminal.progress("    • 保留 socket（别的程序在用）：\(PathText.abbreviated(socket))")
         }
         // Same third state for inventory paths somebody else occupies (a
         // directory where one of our files should be, a repointed PATH link):
         // reported, never deleted, never counted as residue.
         for entry in report.keptForeignEntries {
-            terminal.progress("    • 保留 \(entry.path)（不是本工具建的，没动）")
+            terminal.progress("    • 保留 \(PathText.abbreviated(entry))（不是本工具建的，没动）")
         }
 
         guard report.remaining.isEmpty else {
@@ -96,9 +96,9 @@ struct Uninstall: AsyncParsableCommand {
         // created (so cleanup rightly refused to touch them) — say so
         // instead of letting "彻底卸载" quietly overstate what happened.
         // Entries already reported individually above don't need the summary.
-        let keptInsideCliRoot = report.keptForeignEntries.contains { $0.path.hasPrefix(paths.cliRootDir.path) }
-        if !keptInsideCliRoot, FileManager.default.fileExists(atPath: paths.cliRootDir.path) {
-            terminal.warn("\(paths.cliRootDir.path) 里还有不是本工具建的文件，已保留。")
+        let keptInsideCliRoot = report.keptForeignEntries.contains { $0.path.hasPrefix(PathText.abbreviated(paths.cliRootDir)) }
+        if !keptInsideCliRoot, FileManager.default.fileExists(atPath: PathText.abbreviated(paths.cliRootDir)) {
+            terminal.warn("\(PathText.abbreviated(paths.cliRootDir)) 里还有不是本工具建的文件，已保留。")
         }
         if !alsoRemoveHooks, !CLIRuntimeContext.isMenuSession {
             terminal.out("    未处理 Agent 的 hooks；想一起卸载：signal-light uninstall --remove-hooks")

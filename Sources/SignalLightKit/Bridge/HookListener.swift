@@ -70,7 +70,9 @@ public actor HookListener {
                 let client = accept(fd, nil, nil)
                 guard client >= 0 else { break }  // EAGAIN once the queue drains
                 connectionQueue.async {
-                    Self.handle(client, registry: registry, onBucketChange: onBucketChange)
+                    Task {
+                        await Self.handle(client, registry: registry, onBucketChange: onBucketChange)
+                    }
                 }
             }
         }
@@ -94,7 +96,7 @@ public actor HookListener {
         _ fd: Int32,
         registry: SessionRegistry,
         onBucketChange: @escaping @Sendable (SignalLightBucket) -> Void
-    ) {
+    ) async {
         defer { close(fd) }
 
         guard let payload = readMessage(fd),
@@ -102,14 +104,12 @@ public actor HookListener {
             return
         }
 
-        // Ack before the hook's patience runs out: a hook must never sit on a
-        // socket timeout while its agent waits.
+        // Apply before acking: the ack promises the event reached the state
+        // machine, not merely the socket — clients may act on that.
+        onBucketChange(await registry.apply(event))
+
         let ack = Data(#"{"ok":true}"#.utf8) + Data([0x0A])
         _ = ack.withUnsafeBytes { write(fd, $0.baseAddress, ack.count) }
-
-        Task {
-            onBucketChange(await registry.apply(event))
-        }
     }
 
     private static func readMessage(_ fd: Int32) -> Data? {

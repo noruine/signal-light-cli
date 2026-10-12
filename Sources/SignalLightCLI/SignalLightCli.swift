@@ -27,7 +27,7 @@ struct GlobalOptions: ParsableArguments {
 }
 
 @main
-struct SignalLightCli: AsyncParsableCommand {
+struct SignalLightCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "signal-light",
         abstract: "红绿灯后台服务：不用开 macOS App 的原生 CLI。",

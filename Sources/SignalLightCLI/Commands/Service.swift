@@ -25,7 +25,7 @@ struct Service: AsyncParsableCommand {
         // at it — otherwise the plist would reference a path that vanishes
         // with the build directory.
         guard FileManager.default.fileExists(atPath: paths.binURL.path) else {
-            throw CLIError("还没装，请先运行 signal-light install。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"), exitCode: .noInput)
         }
 
         let device: SignalLightPairedDevice?
@@ -35,7 +35,7 @@ struct Service: AsyncParsableCommand {
             throw CLIError("保存的配对信息读取失败，请重新配对：signal-light pair", exitCode: .config)
         }
         guard device != nil else {
-            throw CLIError("还没配对，请先运行 signal-light pair。", exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
         }
     }
 
@@ -56,7 +56,7 @@ struct Service: AsyncParsableCommand {
 
             let jobInfo = control.jobInfo()
             if jobInfo.pid != nil {
-                terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("服务已经在跑。"))想重启：signal-light service restart")
+                terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("服务已在运行。"))想重启：signal-light service restart")
                 return
             }
 
@@ -127,7 +127,7 @@ struct Service: AsyncParsableCommand {
     struct Autostart: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "autostart",
-            abstract: "开关开机自启（不用先停服务，随时能改）。",
+            abstract: "开关开机自启（不用先停服务）。",
             subcommands: [Enable.self, Disable.self, Status.self]
         )
 
@@ -178,7 +178,7 @@ struct Service: AsyncParsableCommand {
                     if FileManager.default.fileExists(atPath: paths.binURL.path) {
                         terminal.out("开机自启：\(terminal.dimmed("未开启"))（还没登记服务，下次登录才生效）")
                     } else {
-                        terminal.out("还没装，请先运行 signal-light install。")
+                        terminal.out(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"))
                     }
                     return
                 }

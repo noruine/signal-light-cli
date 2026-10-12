@@ -13,7 +13,7 @@ enum SignalLightSessionError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case let .bluetoothUnavailable(detail): detail
-        case .deviceNotFound: "未找到信号灯。请确认设备已通电、距离不太远。"
+        case .deviceNotFound: "没有找到信号灯。请确认设备已通电、距离不太远。"
         case let .connectFailed(detail): "蓝牙连接失败：\(detail)"
         case .notReady: "设备未就绪（缺少蓝牙特征）。"
         case let .timedOut(what): "等待\(what)超时。"

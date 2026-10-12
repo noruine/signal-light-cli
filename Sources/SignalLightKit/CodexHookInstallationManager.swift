@@ -31,6 +31,9 @@ public struct CodexHookInstallationStatus: Equatable, Sendable {
     }
 }
 
+/// `@unchecked`: everything stored here is immutable except
+/// `FileManager`, which Foundation treats as thread-safe for these
+/// operations.
 public final class CodexHookInstallationManager: @unchecked Sendable {
     public let codexDirectory: URL
     public let managedHooksBinaryURL: URL

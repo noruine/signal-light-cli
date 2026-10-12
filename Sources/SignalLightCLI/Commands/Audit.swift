@@ -45,20 +45,20 @@ struct Audit: AsyncParsableCommand {
             // A socket with a live listener is not this CLI's residue — it is
             // in use by the App or another bridge, and cleanup correctly left
             // it alone. Same third state as the shared directories below.
-            if liveSocketPaths.contains(path.path) {
-                terminal.out("\(terminal.dimmed("保留"))  \(path.path)（正在被别的程序使用）")
+            if liveSocketPaths.contains(PathText.abbreviated(path)) {
+                terminal.out("\(terminal.dimmed("保留"))  \(PathText.abbreviated(path))（正在被别的程序使用）")
                 continue
             }
             // An inventory path somebody else occupies (a directory where one
             // of our files should be, a repointed PATH link): still there, but
             // not ours to remove — "已清除" would be a claim about a foreign
             // file we never touched.
-            if keptForeignPaths.contains(path.path) {
-                terminal.out("\(terminal.dimmed("保留"))  \(path.path)（不是本工具建的）")
+            if keptForeignPaths.contains(PathText.abbreviated(path)) {
+                terminal.out("\(terminal.dimmed("保留"))  \(PathText.abbreviated(path))（不是本工具建的）")
                 continue
             }
-            let exists = remainingPaths.contains(path.path)
-            terminal.out("\(exists ? terminal.failure("存在") : terminal.success("已清除"))  \(path.path)")
+            let exists = remainingPaths.contains(PathText.abbreviated(path))
+            terminal.out("\(exists ? terminal.failure("存在") : terminal.success("已清除"))  \(PathText.abbreviated(path))")
         }
 
         // Directories have a third state files don't: still on disk but only
@@ -67,14 +67,14 @@ struct Audit: AsyncParsableCommand {
         // would be a lie while calling it "存在" would be a false alarm.
         for dir in paths.pruneDirsIfEmpty {
             let label: String
-            if remainingPaths.contains(dir.path) {
+            if remainingPaths.contains(PathText.abbreviated(dir)) {
                 label = terminal.failure("存在")
-            } else if FileManager.default.fileExists(atPath: dir.path) {
+            } else if FileManager.default.fileExists(atPath: PathText.abbreviated(dir)) {
                 label = terminal.dimmed("保留")  // 内含其他组件的文件，非本工具残留
             } else {
                 label = terminal.success("已清除")
             }
-            terminal.out("\(label)  \(dir.path)")
+            terminal.out("\(label)  \(PathText.abbreviated(dir))")
         }
 
         let jobLabel = "launchd job (\(SignalLightDaemonPaths.launchAgentLabel))"

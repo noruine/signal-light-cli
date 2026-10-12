@@ -27,18 +27,18 @@ struct Install: AsyncParsableCommand {
         try linkIntoPath(paths: paths, terminal: terminal)
         installHooksBinary(paths: paths, terminal: terminal)
 
-        terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("装好，直接敲 signal-light 就行。"))")
+        terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("安装完成。"))")
 
         if !pathContainsSymlinkDir(paths) {
             terminal.out("")
-            terminal.out("\(terminal.emoji(CLIGlyph.warning))\(terminal.warning("~/.local/bin 不在 PATH 里，现在还敲不了 signal-light。"))")
+            terminal.out("\(terminal.emoji(CLIGlyph.warning))\(terminal.warning("~/.local/bin 不在 PATH 里，现在还运行不了 signal-light。"))")
             terminal.out("    \(shellPathHint())")
         }
 
         terminal.out("")
-        terminal.out("\(terminal.emoji(CLIGlyph.warning))\(terminal.warning("第一次连灯，macOS 会弹窗要蓝牙权限，点「允许」就行。"))")
-        terminal.out("    如果灯不亮，或者蓝牙权限反复失效，可以给它做个固定签名：")
-        terminal.out("      codesign --sign \"Signal Light Dev Local\" \(paths.binURL.path)")
+        terminal.out("\(terminal.emoji(CLIGlyph.warning))\(terminal.warning("首次连接信号灯时，macOS 会弹窗请求蓝牙权限，点「允许」。"))")
+        terminal.out("    灯不亮或蓝牙权限反复失效时，可以配置固定签名：")
+        terminal.out("      codesign --sign \"Signal Light Dev Local\" \(PathText.abbreviated(paths.binURL))")
 
         // In a guided menu session the menu itself walks the user through the
         // next steps (pair → start → …) as offers, so this typed-command
@@ -46,11 +46,8 @@ struct Install: AsyncParsableCommand {
         guard !CLIRuntimeContext.isMenuSession else { return }
 
         terminal.out("")
-        terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))接下来（用 signal-light 按需执行）：")
-        terminal.out("    \(terminal.dimmed("1.")) signal-light pair             配对你的红绿灯")
-        terminal.out("    \(terminal.dimmed("2.")) signal-light service start    启动后台服务")
-        terminal.out("    \(terminal.dimmed("•"))  signal-light hooks install  接入 Agent（会让你选 Claude 还是 Codex）")
-        terminal.out("    \(terminal.dimmed("•"))  signal-light                不带参数进交互菜单，跟着选就行")
+        terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))运行 signal-light 打开菜单。")
+        terminal.out("    命令行用法：signal-light --help")
     }
 
     /// Stages this CLI's own `signal-light-hooks` helper next to the installed

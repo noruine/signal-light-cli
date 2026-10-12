@@ -28,7 +28,7 @@ swift build --build-system native -c release --product signal-light && swift bui
 
 ## 第一次使用
 
-直接运行不带参数的命令，进入交互菜单，跟着选就行：
+直接运行不带参数的命令，进入交互菜单：
 
 ```bash
 .build/release/signal-light

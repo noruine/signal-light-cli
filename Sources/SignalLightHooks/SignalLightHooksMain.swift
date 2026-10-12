@@ -13,9 +13,8 @@ enum SignalLightHooksMain {
         guard !HookSkipConfiguration.shouldSkipHooks(environment: ProcessInfo.processInfo.environment) else {
             return
         }
-        guard let input = try? FileHandle.standardInput.readDataToEndOfFile(), !input.isEmpty else {
-            return
-        }
+        let input = FileHandle.standardInput.readDataToEndOfFile()
+        guard !input.isEmpty else { return }
         guard let event = event(from: input) else { return }
         HookSocketClient.send(event, to: SignalLightDaemonPaths.current().bridgeSocketURL)
     }

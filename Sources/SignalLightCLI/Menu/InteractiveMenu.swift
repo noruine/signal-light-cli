@@ -40,10 +40,10 @@ enum InteractiveMenu {
     /// so it never reads like a restatement of the menu item below it.
     private static func nextStepHint(paths: SignalLightDaemonPaths, snapshot: StatusSnapshot) -> String? {
         let state = MenuState(paths: paths, snapshot: snapshot)
-        if !state.toolInstalled { return "还没安装到本机，先装上吧" }
+        if !state.toolInstalled { return "还没安装到本机" }
         if !state.paired { return "还没配对信号灯" }
-        if !snapshot.serviceIsRunning { return "服务未启动，灯还不会亮" }
-        if !state.anyHooksInstalled { return "还没接入 Agent，接上灯就会跟着会话变色" }
+        if !snapshot.serviceIsRunning { return "服务未启动，灯不会亮" }
+        if !state.anyHooksInstalled { return "还没接入 Agent；接入后灯会随会话状态变色" }
         return nil
     }
 

@@ -40,7 +40,7 @@ struct Doctor: AsyncParsableCommand {
 
     private func checkPairing(paths: SignalLightDaemonPaths) -> DoctorCheck {
         guard let device = try? SignalLightDeviceStore.load(from: paths.deviceJSONURL) else {
-            return DoctorCheck(status: .fail, title: "设备配对", detail: "还没配对，请运行 signal-light pair。")
+            return DoctorCheck(status: .fail, title: "设备配对", detail: ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"))
         }
         guard UUID(uuidString: device.identifier) != nil else {
             return DoctorCheck(status: .fail, title: "设备配对", detail: "配对信息已损坏，请重新配对：signal-light pair")
@@ -61,7 +61,7 @@ struct Doctor: AsyncParsableCommand {
             URL(fileURLWithPath: "/usr/bin/codesign"),
             arguments: ["-dv", paths.binURL.path]
         ) else {
-            return DoctorCheck(status: .warn, title: "签名稳定性", detail: "codesign 跑不起来，跳过。")
+            return DoctorCheck(status: .warn, title: "签名稳定性", detail: "codesign 无法运行，跳过。")
         }
 
         let output = result.stdout + result.stderr
@@ -69,7 +69,7 @@ struct Doctor: AsyncParsableCommand {
             return DoctorCheck(
                 status: .warn,
                 title: "签名稳定性",
-                detail: "没签名；重新编译后可能要重新授权蓝牙。建议签一下：codesign --sign \"Signal Light Dev Local\" \(paths.binURL.path)"
+                detail: "没签名；重新编译后可能要重新授权蓝牙。建议签一下：codesign --sign \"Signal Light Dev Local\" \(PathText.abbreviated(paths.binURL))"
             )
         }
         if output.localizedCaseInsensitiveContains("adhoc") {
@@ -89,9 +89,9 @@ struct Doctor: AsyncParsableCommand {
             // but never started" — after the install/service split these are
             // two different next steps.
             if FileManager.default.fileExists(atPath: paths.binURL.path) {
-                return DoctorCheck(status: .warn, title: "后台服务", detail: "还没启动，请运行 signal-light service start。")
+                return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "还没启动，请运行 signal-light service start。", menu: "还没启动。"))
             }
-            return DoctorCheck(status: .warn, title: "后台服务", detail: "还没装，请运行 signal-light install。")
+            return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"))
         }
 
         let jobInfo = control.jobInfo()
@@ -104,7 +104,7 @@ struct Doctor: AsyncParsableCommand {
             return DoctorCheck(
                 status: .warn,
                 title: "后台服务",
-                detail: "launchd 里登记着，但进程没起来；请运行 signal-light service start。"
+                detail: ContextText.choose(cli: "launchd 里登记着，但进程没起来；请运行 signal-light service start。", menu: "launchd 里登记着，但进程没起来。")
             )
         }
 
@@ -113,7 +113,7 @@ struct Doctor: AsyncParsableCommand {
                 return DoctorCheck(
                     status: .warn,
                     title: "后台服务",
-                    detail: "launchd 显示正在运行，但 socket 还没就绪：可能刚启动，或蓝牙未就绪。运行 signal-light status 查看详情。"
+                    detail: ContextText.choose(cli: "launchd 显示正在运行，但 socket 还没就绪：可能刚启动，或蓝牙未就绪。运行 signal-light status 查看详情。", menu: "launchd 显示正在运行，但 socket 还没就绪：可能刚启动，或蓝牙未就绪。")
                 )
             }
             let pidText = jobInfo.pid.map { "（PID \($0)）" } ?? ""
@@ -121,7 +121,7 @@ struct Doctor: AsyncParsableCommand {
         }
 
         guard socketActive else {
-            return DoctorCheck(status: .warn, title: "后台服务", detail: "登记过但没启动；请运行 signal-light service start。")
+            return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "登记过但没启动；请运行 signal-light service start。", menu: "登记过但没启动。"))
         }
         return DoctorCheck(
             status: .fail,

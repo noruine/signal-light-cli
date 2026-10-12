@@ -24,7 +24,7 @@ enum SignalLightDaemonRunner {
         }
 
         guard let device = try SignalLightStores.loadPairedDevice(from: paths.deviceJSONURL) else {
-            throw CLIError("还没配对信号灯，请先运行 signal-light pair。", exitCode: .noInput)
+            throw CLIError("还没配对信号灯，请运行 signal-light pair。", exitCode: .noInput)
         }
         guard let deviceID = UUID(uuidString: device.identifier) else {
             throw CLIError("保存的设备信息已损坏，请重新配对：signal-light pair", exitCode: .config)
