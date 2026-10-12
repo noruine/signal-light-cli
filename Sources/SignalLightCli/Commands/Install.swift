@@ -38,7 +38,7 @@ struct Install: AsyncParsableCommand {
         terminal.out("")
         terminal.out("\(terminal.emoji(CLIGlyph.warning))\(terminal.warning("第一次连灯，macOS 会弹窗要蓝牙权限，点「允许」就行。"))")
         terminal.out("    如果灯不亮，或者蓝牙权限反复失效，可以给它做个固定签名：")
-        terminal.out("      codesign --sign \"Open Island Dev Local\" \(paths.binURL.path)")
+        terminal.out("      codesign --sign \"Signal Light Dev Local\" \(paths.binURL.path)")
 
         // In a guided menu session the menu itself walks the user through the
         // next steps (pair → start → …) as offers, so this typed-command

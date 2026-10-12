@@ -15,7 +15,7 @@ struct Pair: AsyncParsableCommand {
     @Option(help: "按名称或 UUID 直接选择设备，跳过交互式列表。")
     var device: String?
 
-    @Flag(help: "自动选择扫描到的第一个设备。")
+    @Flag(help: "只在扫到唯一设备时自动选择；扫到多个会列出来让你指定。")
     var first: Bool = false
 
     func run() async throws {
@@ -113,7 +113,17 @@ enum PairFlow {
         }
 
         if first {
-            return discovered[0]
+            // A scan can see a neighbor's light. Taking "the first one" then
+            // would drive hardware someone else owns — only act when there is
+            // exactly one candidate, and otherwise make the user name it.
+            guard discovered.count == 1, let only = discovered.first else {
+                let names = discovered.map(\.name).joined(separator: "、")
+                throw CLIError(
+                    "扫到 \(discovered.count) 个信号灯：\(names)。请用 --device <名称或 UUID> 指定。",
+                    exitCode: .usage
+                )
+            }
+            return only
         }
 
         guard terminal.isInteractive else {
@@ -137,5 +147,35 @@ enum PairFlow {
             return nil  // backed out of the picker; not an error
         }
         return discovered[index]
+    }
+}
+
+
+/// Forgets the paired light. The service is stopped first: a running daemon
+/// would otherwise keep driving a device the user just walked away from.
+struct Unpair: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "unpair",
+        abstract: "忘掉已配对的红绿灯（会先停下后台服务）。"
+    )
+
+    @OptionGroup var globals: GlobalOptions
+
+    func run() async throws {
+        let terminal = globals.makeTerminal()
+        let paths = SignalLightDaemonPaths.current()
+        let control = LaunchAgentControl(paths: paths)
+
+        if control.jobInfo().isLoaded {
+            terminal.progress("先停下后台服务…")
+            await control.bootoutAndWait()
+        }
+
+        guard FileManager.default.fileExists(atPath: paths.deviceJSONURL.path) else {
+            terminal.out("本来就没配对。")
+            return
+        }
+        try FileManager.default.removeItem(at: paths.deviceJSONURL)
+        terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已忘掉配对设备。重新配对：signal-light pair"))")
     }
 }

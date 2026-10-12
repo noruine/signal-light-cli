@@ -436,10 +436,10 @@ public enum CodexHookInstaller {
             return false
         }
 
-        return isLegacyOpenIslandHookCommand(command)
+        return isLegacyHookCommand(command)
     }
 
-    private static func isLegacyOpenIslandHookCommand(_ command: String) -> Bool {
+    private static func isLegacyHookCommand(_ command: String) -> Bool {
         LegacyHookCommand.matches(command)
     }
 

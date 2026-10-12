@@ -28,15 +28,16 @@ private struct FirmwareManifest: Decodable {
     let binary: String?
 }
 
-/// Headless port of the app's `SignalLightFirmwareUpdateChecker`: fetches the
-/// per-hardware `version.json` manifest and downloads the named binary. Kept
-/// free of any BLE/UI dependency — it only ever produces a comparison result
-/// and a local file URL that the OTA transfer then flashes.
+/// Fetches the per-hardware `version.json` manifest and downloads the named
+/// binary — no BLE, no UI, so the comparison result and the local file are
+/// all a caller gets.
 ///
-/// URL scheme mirrors the app exactly (see that type's comments for why the
-/// manifest comes from raw.githubusercontent.com but the binary from
-/// jsDelivr): both are keyed by the hardware id the device reports over BLE,
-/// so a new board publishes under its own path with no code change.
+/// The manifest comes from `raw.githubusercontent.com` while the binary goes
+/// through jsDelivr: raw serves small JSON promptly but its 12-hour edge
+/// cache makes a freshly published manifest slow to appear, and jsDelivr
+/// reliably serves the large binary that raw sometimes stalls on mid-transfer.
+/// Both are keyed by the hardware id the device reports over BLE, so a new
+/// board publishes under its own path with no code change.
 struct FirmwareUpdateChecker {
     private static let maxAttempts = 3
 

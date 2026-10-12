@@ -45,6 +45,7 @@ struct SignalLightCli: AsyncParsableCommand {
         version: "1.0.0",
         subcommands: [
             Pair.self,
+            Unpair.self,
             Install.self,
             Uninstall.self,
             Service.self,

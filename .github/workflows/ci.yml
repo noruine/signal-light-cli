@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Test
+        run: scripts/test.sh
+
+      - name: CLI copy check
+        run: zsh scripts/check-cli-copy.sh
+
+      - name: Install linters
+        run: brew install swiftformat swiftlint
+
+      - name: Lint formatting
+        run: swiftformat --lint .
+
+      - name: Lint rules
+        run: swiftlint --strict

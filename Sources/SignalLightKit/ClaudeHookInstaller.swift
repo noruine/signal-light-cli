@@ -312,7 +312,7 @@ public enum ClaudeHookInstaller {
             return true
         }
 
-        return isLegacyOpenIslandHookCommand(command)
+        return isLegacyHookCommand(command)
     }
 
     private static func isManagedHookForInstall(_ hook: [String: Any], replacingCommand: String) -> Bool {
@@ -324,10 +324,10 @@ public enum ClaudeHookInstaller {
             return false
         }
 
-        return isLegacyOpenIslandHookCommand(command)
+        return isLegacyHookCommand(command)
     }
 
-    private static func isLegacyOpenIslandHookCommand(_ command: String) -> Bool {
+    private static func isLegacyHookCommand(_ command: String) -> Bool {
         LegacyHookCommand.matches(command)
     }
 

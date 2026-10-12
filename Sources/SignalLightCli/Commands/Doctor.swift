@@ -69,7 +69,7 @@ struct Doctor: AsyncParsableCommand {
             return DoctorCheck(
                 status: .warn,
                 title: "签名稳定性",
-                detail: "没签名；重新编译后可能要重新授权蓝牙。建议签一下：codesign --sign \"Open Island Dev Local\" \(paths.binURL.path)"
+                detail: "没签名；重新编译后可能要重新授权蓝牙。建议签一下：codesign --sign \"Signal Light Dev Local\" \(paths.binURL.path)"
             )
         }
         if output.localizedCaseInsensitiveContains("adhoc") {
