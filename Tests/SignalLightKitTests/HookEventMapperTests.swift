@@ -1,0 +1,64 @@
+import Foundation
+import Testing
+
+@testable import SignalLightKit
+
+@Suite("Hook event mapping")
+struct HookEventMapperTests {
+    @Test("Claude permission requests map to approvals")
+    func claudeApproval() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/tmp","tool_name":"Bash"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.source == .claude)
+        #expect(event.kind == .permissionRequest)
+        #expect(event.isQuestion == false)
+    }
+
+    @Test("Claude questions map to answers")
+    func claudeQuestion() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/tmp","tool_name":"AskUserQuestion"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.isQuestion)
+    }
+
+    @Test("Claude subagent hooks are dropped")
+    func claudeSubagent() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"UserPromptSubmit","session_id":"s1","cwd":"/tmp","agent_id":"sub"}"#)
+        #expect(HookEventMapper.event(from: payload) == nil)
+    }
+
+    @Test("Claude events the light ignores map to nothing")
+    func claudeIgnored() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PreCompact","session_id":"s1","cwd":"/tmp"}"#)
+        #expect(HookEventMapper.event(from: payload) == nil)
+    }
+
+    @Test("Codex events map onto the same shape")
+    func codexApproval() throws {
+        let payload = try decodeCodex(#"{"hook_event_name":"PermissionRequest","session_id":"c1","cwd":"/tmp"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.source == .codex)
+        #expect(event.kind == .permissionRequest)
+    }
+
+    @Test("Codex.app internal hooks are dropped")
+    func codexAppNoise() throws {
+        let payload = try decodeCodex(#"{"hook_event_name":"UserPromptSubmit","session_id":"c1","cwd":"/tmp","terminal_app":"Codex.app"}"#)
+        #expect(HookEventMapper.event(from: payload) == nil)
+    }
+
+    @Test("Codex.app hooks with a transcript are real sessions")
+    func codexAppWithTranscript() throws {
+        let payload = try decodeCodex(#"{"hook_event_name":"UserPromptSubmit","session_id":"c1","cwd":"/tmp","terminal_app":"Codex.app","transcript_path":"/tmp/t.jsonl"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.kind == .userPromptSubmit)
+    }
+
+    private func decodeClaude(_ json: String) throws -> ClaudeHookPayload {
+        try JSONDecoder().decode(ClaudeHookPayload.self, from: Data(json.utf8))
+    }
+
+    private func decodeCodex(_ json: String) throws -> CodexHookPayload {
+        try JSONDecoder().decode(CodexHookPayload.self, from: Data(json.utf8))
+    }
+}
