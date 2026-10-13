@@ -36,26 +36,16 @@ enum PairFlow {
         let log = RestrainedLog(url: paths.logURL)
         let progress = ScanProgress(terminal: terminal)
 
-        let outcome = await withCheckedContinuation { (continuation: CheckedContinuation<SignalLightBLEDaemon.ScanOutcome, Never>) in
-            SignalLightBLEDaemon.scan(
-                timeout: timeout,
-                log: log,
-                onPhase: { phase in
-                    switch phase {
-                    case .waitingForBluetooth: progress.waitingForBluetooth()
-                    case .scanning: progress.scanning(seconds: timeout)
-                    case .finalizing: progress.finalizing()
-                    }
-                },
-                completion: { continuation.resume(returning: $0) }
-            )
-        }
+        let outcome = try await runScan(timeout: timeout, log: log, progress: progress, terminal: terminal)
         progress.finish()
 
         let discovered: [SignalLightBLEDaemon.DiscoveredDevice]
         switch outcome {
         case let .found(devices):
             discovered = devices
+        case .cancelled:
+            CancelNotice.say("已取消配对。", terminal: terminal)
+            return
         case .bluetoothOff:
             throw CLIError("蓝牙未开启。请打开蓝牙后重新配对。", exitCode: .unavailable)
         case .unauthorized:
@@ -98,6 +88,80 @@ enum PairFlow {
                 menu: "    服务还没启动。"
             ))
         }
+    }
+
+    /// Runs the one-shot scan, arming the terminal's stop keys when there is
+    /// a keyboard to listen to: Esc (or Ctrl-C, like every other cancel here)
+    /// ends the wait the same way backing out of the device picker does — as
+    /// `.cancelled`, printed as the usual one-line cancel. A scan can take a
+    /// minute, and watching it with no way out is the worst part of pairing.
+    private static func runScan(
+        timeout: Double,
+        log: RestrainedLog,
+        progress: ScanProgress,
+        terminal: Terminal
+    ) async throws -> SignalLightBLEDaemon.ScanOutcome {
+        let onPhase: @Sendable (SignalLightBLEDaemon.ScanPhase) -> Void = { phase in
+            switch phase {
+            case .waitingForBluetooth: progress.waitingForBluetooth()
+            case .scanning: progress.scanning(seconds: timeout)
+            case .finalizing: progress.finalizing()
+            }
+        }
+
+        guard terminal.isInteractive else {
+            return await withCheckedContinuation { continuation in
+                SignalLightBLEDaemon.scan(
+                    timeout: timeout,
+                    log: log,
+                    onPhase: onPhase,
+                    completion: { continuation.resume(returning: $0) }
+                )
+            }
+        }
+
+        let handle = ScanCancelHandle()
+        return try await withThrowingTaskGroup(of: SignalLightBLEDaemon.ScanOutcome.self) { group in
+            group.addTask {
+                await withCheckedContinuation { continuation in
+                    let control = SignalLightBLEDaemon.scan(
+                        timeout: timeout,
+                        log: log,
+                        onPhase: onPhase,
+                        completion: { continuation.resume(returning: $0) }
+                    )
+                    handle.adopt(control)
+                }
+            }
+            group.addTask {
+                await waitForScanCancelKey()
+                handle.cancel()
+                return .cancelled
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else {
+                throw CancellationError()
+            }
+            return first
+        }
+    }
+
+    /// Blocks while the scan runs: returns once any interrupt key arrives
+    /// — the same set the pickers cancel on — or when this task is cancelled
+    /// because the scan finished on its own. The caller treats the two exits
+    /// identically (cancelling a finished scan is a no-op), so nothing is
+    /// reported back.
+    private static func waitForScanCancelKey() async {
+        guard let original = RawMode.enter(interceptingInterrupts: true) else {
+            // No keys readable after all: sit still until the scan files its
+            // result and the task group cancels this one.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_600_000_000_000)
+            }
+            return
+        }
+        defer { RawMode.restore(original) }
+        _ = try? await waitForInterruptKey()
     }
 
     private static func selectDevice(
@@ -150,6 +214,34 @@ enum PairFlow {
             return nil  // backed out of the picker; not an error
         }
         return discovered[index]
+    }
+}
+
+/// Bridges the scan's control handle between the two racing tasks: the scan
+/// task creates the handle once the scan starts, the key watcher cancels
+/// through it. A cancel that arrives before the handle exists is remembered
+/// and applied when it does.
+private final class ScanCancelHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var control: SignalLightScanControl?
+    private var cancelRequested = false
+
+    func adopt(_ control: SignalLightScanControl) {
+        lock.lock()
+        self.control = control
+        let cancelRequested = cancelRequested
+        lock.unlock()
+        if cancelRequested {
+            control.cancel()
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelRequested = true
+        let control = control
+        lock.unlock()
+        control?.cancel()
     }
 }
 

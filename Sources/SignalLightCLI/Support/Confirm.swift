@@ -6,13 +6,18 @@ import Foundation
 /// not guard against piped stdin itself, since the non-interactive path
 /// (require `--yes`) is a distinct, explicit branch in each command.
 public enum Confirm {
-    /// A single-line arrow-key 是/否 toggle, so confirming reads exactly like
-    /// every other selection in this CLI (↑/↓ to move, Enter to confirm, Esc
-    /// to cancel) instead of a typed `[y/N]` whose behavior on a stray key is
-    /// unclear. Renders inline (no screen clear) so preceding output — a
-    /// calibration result, an uninstall summary — stays visible to inform the
-    /// choice. `defaultAnswer` sets which side starts highlighted; Esc returns
-    /// it. Falls back to a typed y/n prompt when stdin isn't a TTY.
+    /// A single-line 是/否 picker, so confirming reads exactly like every
+    /// other selection in this CLI (arrows to land, Enter to confirm, Esc to
+    /// cancel) instead of a typed `[y/N]` whose behavior on a stray key is
+    /// unclear. Arrows *land on* an answer — ↑/← is 是, ↓/→ is 否 — so a
+    /// repeated or held key never flips the answer back; space still toggles.
+    /// `question` stays short (callers put context on its own line above):
+    /// the picker repaints in place, and a line wider than the terminal
+    /// would scroll a row on every repaint. Renders inline (no screen clear)
+    /// so preceding output — a calibration result, an uninstall summary —
+    /// stays visible to inform the choice. `defaultAnswer` sets which side
+    /// starts highlighted; Esc returns it. Falls back to a typed y/n prompt
+    /// when stdin isn't a TTY.
     public static func promptYesNo(_ terminal: Terminal, _ question: String, defaultAnswer: Bool = false) -> Bool {
         guard let original = RawMode.enter() else {
             return typedFallback(terminal, question, defaultAnswer: defaultAnswer)
@@ -24,9 +29,17 @@ public enum Confirm {
         writeStderr("\u{1B}[?25l")  // hide cursor during navigation
 
         var yes = defaultAnswer
+        var drawn: Bool?
         while true {
-            draw(terminal, question: question, yes: yes)
+            // Repaint only when the shown answer changes, so a repeated or
+            // held key never scrubs the screen.
+            if drawn != yes {
+                draw(terminal, question: question, yes: yes)
+                drawn = yes
+            }
             switch readKey() {
+            case let .select(answer):
+                yes = answer
             case .toggle:
                 yes.toggle()
             case .confirm:
@@ -50,10 +63,13 @@ public enum Confirm {
 
     private static func optionLabel(_ terminal: Terminal, _ text: String, selected: Bool) -> String {
         guard selected else { return "  \(text)  " }
-        return terminal.useColor ? "\u{1B}[7m ❯\(text) \u{1B}[0m" : "[\(text)]"
+        // Same visible width as the unselected label, so moving the
+        // highlight never shifts the question line around.
+        return terminal.useColor ? "\u{1B}[7m ❯\(text)  \u{1B}[0m" : " [\(text)] "
     }
 
     private enum Key {
+        case select(Bool)
         case toggle, confirm, cancel, ignore
     }
 
@@ -66,14 +82,17 @@ public enum Confirm {
             return .confirm
         case 0x03, 0x04, 0x71, 0x51:  // Ctrl-C, Ctrl-D, q, Q
             return .cancel
-        case 0x20:  // Space also toggles, matching the checkbox picker's muscle memory
+        case 0x20:  // Space toggles, matching the checkbox picker's muscle memory
             return .toggle
-        case 0x6A, 0x6B, 0x68, 0x6C:  // j/k/h/l (vim)
-            return .toggle
+        case 0x6B, 0x68:  // k and h (vim up/left) land on 是
+            return .select(true)
+        case 0x6A, 0x6C:  // j and l (vim down/right) land on 否
+            return .select(false)
         case 0x1B:  // Esc, or an arrow-key sequence
             switch RawMode.classifyEscape() {
             case .lone: return .cancel
-            case .up, .down, .left, .right: return .toggle  // any arrow flips 是/否
+            case .up, .left: return .select(true)
+            case .down, .right: return .select(false)
             case .otherSequence: return .ignore
             }
         default:

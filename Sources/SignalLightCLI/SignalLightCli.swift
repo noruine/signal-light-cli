@@ -43,7 +43,7 @@ struct SignalLightCLI: AsyncParsableCommand {
           signal-light config show    查看灯效配置
           signal-light status         查看当前状态
         """,
-        version: "1.0.0",
+        version: AppVersion.current(),
         subcommands: [
             Pair.self,
             Unpair.self,

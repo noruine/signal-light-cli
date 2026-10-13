@@ -93,6 +93,8 @@ scripts/test.sh            # 跑测试；只装 CommandLineTools 的机器也能
 scripts/check-cli-copy.sh  # 文案检查：输出不带"了"（不了/为了/除了 除外）
 ```
 
+版本号放在仓库根的 `VERSION` 文件，`signal-light --version` 和升级提示都按它显示；判断"有没有新代码"比对的是源码内容哈希，未提交的改动也算数。
+
 CI 在每次 push 时跑构建 + 测试 + SwiftFormat/SwiftLint + 文案检查。
 
 > `swift build` 报 `Could not initialize build system … Unknown error parsing property list` 时：从 Command Line Tools 27.0（Swift 6.4）起，SwiftPM 的默认构建引擎在没装完整 Xcode 的机器上会这样失败；加 `--build-system native` 用回备用引擎即可（会打一条 deprecation 警告，忽略）。装好完整 Xcode 后 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`，`swift test` 也才能直接跑。

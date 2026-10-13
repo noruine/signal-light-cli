@@ -65,16 +65,15 @@ struct Firmware: AsyncParsableCommand {
 
         /// The one line of safety copy before flashing — deliberately not a
         /// block of bullets: this runs right after the "有新版本" line and a
-        /// wall of text there reads as noise. Returns false when the user
-        /// answers no; nothing has been touched at that point, so the caller
-        /// just stops and says so — a cancel is not an error.
+        /// wall of text there reads as noise. It prints as its own line,
+        /// which keeps the picker short enough to repaint in place. Returns
+        /// false when the user answers no; nothing has been touched at that
+        /// point, so the caller just stops and says so — a cancel is not an
+        /// error.
         private func confirmProceed(terminal: Terminal) -> Bool {
             guard !yes else { return true }
-            return Confirm.promptYesNo(
-                terminal,
-                "升级时别断电、别关程序；电脑和灯离近点（约 1–2 分钟）。开始？",
-                defaultAnswer: false
-            )
+            terminal.out("升级时别断电、别关程序；电脑和灯离近点（约 1–2 分钟）。")
+            return Confirm.promptYesNo(terminal, "开始升级？", defaultAnswer: false)
         }
 
         private func runUpdate(terminal: Terminal, deviceID: UUID) async throws {
@@ -372,10 +371,12 @@ private func runWhileAnsweringInterruptKeys<T: Sendable>(
 }
 
 /// Returns only to mean "the user pressed Ctrl-C". Ctrl-C is the terminal's
-/// own interrupt, the one key a stuck program is expected to answer — the
-/// waits advertise it rather than an Esc shortcut that competes with menu
-/// muscle memory. A non-TTY, EOF or a cancelled task never counts as a stop:
-/// `body` stays the only other way out.
+/// own interrupt, the one key a stuck program is expected to answer, and
+/// what the flashing waits advertise: Esc stops nothing here, where an
+/// abandoned write could leave the device mid-update. (The pairing scan,
+/// where stopping costs nothing, answers Esc as well — see `PairFlow`.)
+/// A non-TTY, EOF or a cancelled task never counts as a stop: `body` stays
+/// the only other way out.
 private func waitForCancelKey() async throws {
     guard let original = RawMode.enter(interceptingInterrupts: true) else {
         while true {
@@ -387,40 +388,6 @@ private func waitForCancelKey() async throws {
     while true {
         if try await waitForInterruptKey() == .ctrlC {
             return
-        }
-    }
-}
-
-/// What the just-read interrupt key was. Only Ctrl-C stops anything; the rest
-/// are read (so they don't echo as junk) and left to the caller to answer.
-private enum InterruptKey {
-    case ctrlC
-    case other
-}
-
-/// Blocks until an interrupt key arrives; other keystrokes are ignored, and
-/// EOF/read errors never count as a keypress. Only meaningful once the
-/// terminal is in key-reading mode (`interceptingInterrupts`).
-private func waitForInterruptKey() async throws -> InterruptKey {
-    while true {
-        try Task.checkCancellation()
-        var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
-        guard poll(&descriptor, 1, 100) > 0 else { continue }
-
-        var byte: UInt8 = 0
-        guard read(STDIN_FILENO, &byte, 1) == 1 else {
-            try await Task.sleep(nanoseconds: 200_000_000)
-            continue
-        }
-        switch byte {
-        case 0x03:  // Ctrl-C
-            return .ctrlC
-        case 0x04, 0x71, 0x51:  // Ctrl-D, q, Q
-            return .other
-        case 0x1B:  // Esc, or the lead byte of an arrow key
-            if case .lone = RawMode.classifyEscape() { return .other }
-        default:
-            continue
         }
     }
 }

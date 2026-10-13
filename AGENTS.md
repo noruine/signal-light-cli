@@ -70,6 +70,11 @@ hardware.
   results: 已X for a finished action, X完成 for a finished flow, X失败 for a
   failed one, 无法X for an environment limit, 已取消X for a cancel. A cancel
   says one line and returns; only output worth reading asks for a keypress.
+- `VERSION` at the repo root is the human version; every commit that
+  touches shipped code (`Sources/`, `Makefile`, `Package.swift`) bumps it
+  in the same commit — `feat` moves the minor digit, anything else the
+  patch digit. Docs, tests and tooling leave it alone. Display only:
+  change detection compares the source stamp, not the version.
 - Results go to stdout, progress and warnings to stderr, so pipes stay clean.
 
 ## Git

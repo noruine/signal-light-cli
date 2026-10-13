@@ -103,7 +103,8 @@ struct Calibrate: AsyncParsableCommand {
 
         terminal.out("")
         terminal.out("校准结果：红=GPIO \(red)  黄=GPIO \(yellow)  绿=GPIO \(green)")
-        guard Confirm.promptYesNo(terminal, "写进设备，以后一直用这套？", defaultAnswer: true) else {
+        terminal.out("写进设备后，以后一直用这套。")
+        guard Confirm.promptYesNo(terminal, "开始写入？", defaultAnswer: true) else {
             terminal.out("未保存。")
             return
         }

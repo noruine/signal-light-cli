@@ -7,6 +7,9 @@ import SignalLightKit
 struct BuildRecord: Codable {
     let sourceRepo: String
     let sourceStamp: String
+    /// The checkout's `VERSION` at build time; optional because records
+    /// written before the file existed carry none.
+    let sourceVersion: String?
 
     static func load(paths: SignalLightDaemonPaths) -> BuildRecord? {
         guard let data = try? Data(contentsOf: paths.buildJSONURL) else { return nil }

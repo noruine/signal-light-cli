@@ -116,7 +116,8 @@ struct Uninstall: AsyncParsableCommand {
     private func confirmHooksRemoval(terminal: Terminal) -> Bool {
         if removeHooks { return true }
         guard terminal.isInteractive else { return false }
-        return Confirm.promptYesNo(terminal, "Claude Code / Codex 里的 hooks 也一起卸掉？", defaultAnswer: false)
+        terminal.out("Claude Code / Codex 里的 hooks 也会一起卸掉。")
+        return Confirm.promptYesNo(terminal, "一起卸掉？", defaultAnswer: false)
     }
 
     /// Best-effort: a failure removing one agent's hooks (e.g. permissions)
@@ -149,6 +150,7 @@ struct Uninstall: AsyncParsableCommand {
             )
         }
 
-        return Confirm.promptYesNo(terminal, "会停掉服务，删掉 signal-light 的所有文件。继续？")
+        terminal.out("会停掉服务，删掉 signal-light 的所有文件。")
+        return Confirm.promptYesNo(terminal, "继续？")
     }
 }

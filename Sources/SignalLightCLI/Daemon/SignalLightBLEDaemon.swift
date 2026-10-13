@@ -32,6 +32,9 @@ final class SignalLightBLEDaemon: NSObject, @unchecked Sendable {
     /// must never collapse into a single "未找到设备" error.
     enum ScanOutcome: Sendable {
         case found([DiscoveredDevice])
+        /// The user stopped the scan from the keyboard — a normal way to end
+        /// the wait, never an error.
+        case cancelled
         case bluetoothOff
         case unauthorized
         case unsupported
@@ -184,6 +187,10 @@ final class SignalLightBLEDaemon: NSObject, @unchecked Sendable {
 
     // MARK: - One-shot scan for `pair` (no persistent state, independent instance)
 
+    /// Starts the one-shot scan and returns the handle that can stop it
+    /// early (see `SignalLightScanControl`). The handle may be dropped: the
+    /// scan keeps itself alive until `completion` fires.
+    @discardableResult
     static func scan(
         timeout: TimeInterval,
         maxBluetoothWait: TimeInterval = 60,
@@ -191,14 +198,14 @@ final class SignalLightBLEDaemon: NSObject, @unchecked Sendable {
         log: RestrainedLog,
         onPhase: @escaping (ScanPhase) -> Void = { _ in },
         completion: @escaping (ScanOutcome) -> Void
-    ) {
-        // `CBCentralManager.delegate` is `weak`, so nothing keeps the scanner
-        // alive on its own once `start()`'s dispatch closure has run — this
-        // self-owning closure is what retains it until `finish()` fires,
-        // breaking the cycle by nil-ing the box. Without it, CoreBluetooth's
-        // delegate callbacks (and therefore `completion`) never arrive.
-        var scanner: SignalLightBLEScanner?
-        scanner = SignalLightBLEScanner(
+    ) -> SignalLightScanControl {
+        // `CBCentralManager.delegate` is `weak`, so the scanner would die as
+        // soon as this function returns — and with it every delegate
+        // callback, including `completion`. The handle retains the scanner,
+        // the completion closure retains the handle, and the pair is released
+        // together when the scan finishes (`release`).
+        let handle = SignalLightScanControl()
+        let scanner = SignalLightBLEScanner(
             timeout: timeout,
             maxBluetoothWait: maxBluetoothWait,
             graceAfterFirstFind: graceAfterFirstFind,
@@ -206,9 +213,11 @@ final class SignalLightBLEDaemon: NSObject, @unchecked Sendable {
             onPhase: onPhase
         ) { outcome in
             completion(outcome)
-            scanner = nil
+            handle.release()
         }
-        scanner?.start()
+        handle.adopt(scanner)
+        scanner.start()
+        return handle
     }
 }
 
@@ -283,6 +292,37 @@ extension SignalLightBLEDaemon: CBPeripheralDelegate {
     }
 }
 
+/// Handle for a one-shot scan: lets the pairing flow's keyboard watcher stop
+/// an in-flight scan, and keeps the scan alive until it finishes. `cancel`
+/// after a natural finish is a no-op.
+final class SignalLightScanControl: @unchecked Sendable {
+    private let lock = NSLock()
+    private var scanner: SignalLightBLEScanner?
+
+    fileprivate init() {}
+
+    fileprivate func adopt(_ scanner: SignalLightBLEScanner) {
+        lock.lock()
+        self.scanner = scanner
+        lock.unlock()
+    }
+
+    /// Drops the scanner once the scan ended, releasing the self-owning
+    /// cycle that kept it alive until now.
+    fileprivate func release() {
+        lock.lock()
+        scanner = nil
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        let scanner = scanner
+        lock.unlock()
+        scanner?.cancel()
+    }
+}
+
 /// Independent, short-lived scanner used only by `signal-light pair` — it
 /// never connects, just discovers service-matching peripherals for the user
 /// to choose from. Kept fully separate from `SignalLightBLEDaemon` so the
@@ -322,6 +362,14 @@ private final class SignalLightBLEScanner: NSObject, @unchecked Sendable, CBCent
         self.log = log
         self.onPhase = onPhase
         self.completion = completion
+    }
+
+    /// Ends the scan early from any thread: the radio stops and the
+    /// completion fires with `.cancelled`. A no-op once finished.
+    func cancel() {
+        queue.async { [self] in
+            finish(.cancelled)
+        }
     }
 
     func start() {

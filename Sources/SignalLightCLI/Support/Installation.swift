@@ -130,7 +130,11 @@ enum Installation {
             return
         }
         do {
-            try BuildRecord(sourceRepo: repoRoot.path, sourceStamp: stamp).save(paths: paths)
+            try BuildRecord(
+                sourceRepo: repoRoot.path,
+                sourceStamp: stamp,
+                sourceVersion: AppVersion.sourceVersion(repoRoot: repoRoot)
+            ).save(paths: paths)
         } catch {
             terminal.warn("记录构建来源失败：\(error)")
         }
