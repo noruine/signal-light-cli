@@ -17,9 +17,10 @@ enum MenuPrompt {
     /// until Enter. Off a TTY it falls back to plain `readLine`.
     static func readLine(_ question: String) -> String? {
         // Enter raw mode *before* drawing the prompt: this both suppresses
-        // echo for the whole prompt lifetime and (via TCSAFLUSH) drops any
-        // keys mashed before the prompt appeared, so a stray Esc typed in the
-        // gap can't get cooked-echoed as `^[` or acted on prematurely.
+        // echo for the whole prompt lifetime and drops any keys mashed
+        // before the prompt appeared, so a stray Esc typed in the gap can't
+        // get cooked-echoed as `^[` or acted on prematurely.
+        RawMode.discardPendingInput()
         guard let original = RawMode.enter() else {
             FileHandle.standardError.write(Data(question.utf8))
             guard let line = Swift.readLine(strippingNewline: true) else { return nil }
@@ -94,7 +95,8 @@ enum MenuPrompt {
     /// Blocks until the user presses Enter (or Esc, or Ctrl-C/Ctrl-D), so
     /// command output stays on screen long enough to read before the menu
     /// redraws over it. EOF just returns. The default message is the
-    /// canonical single-key bar `回车 继续`.
+    /// canonical single-key bar `回车 继续`, printed under a blank line so
+    /// the bottom spacing matches every other screen's shell.
     ///
     /// Reads in cbreak mode rather than via cooked `readLine`: at a cooked
     /// prompt an impatient arrow-key press echoes its raw escape bytes (`^[[B`)
@@ -104,8 +106,10 @@ enum MenuPrompt {
     /// "captured" the keyboard. Falls back to a line read when stdin isn't a
     /// TTY.
     static func pause(_ terminal: Terminal, message: String? = nil) {
-        FileHandle.standardError.write(Data(terminal.dimmed(message ?? terminal.keyBar([.enter("继续")])).utf8))
+        FileHandle.standardError.write(Data(("\n" + terminal.dimmed(message ?? terminal.keyBar([.enter("继续")]))).utf8))
 
+        // A key mashed while the action ran must not answer the pause.
+        RawMode.discardPendingInput()
         guard let original = RawMode.enter() else {
             _ = Swift.readLine()
             FileHandle.standardError.write(Data("\n".utf8))
@@ -177,7 +181,7 @@ enum MenuLoop {
         terminal: Terminal,
         page: String? = nil,
         escapeHint: KeyHint = .escape("返回"),
-        header: @escaping () -> Void,
+        context: @escaping () -> [String],
         buildItems: () -> [MenuChoice]
     ) async {
         while true {
@@ -185,11 +189,9 @@ enum MenuLoop {
             let outcome = MenuSelector.choose(
                 items: items.map(\.label),
                 terminal: terminal,
-                footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint]),
-                header: {
-                    terminal.out(terminal.menuBreadcrumb(page))
-                    header()
-                }
+                trail: page.map { [$0] } ?? [],
+                context: context,
+                footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint])
             )
             guard case let .selected(index) = outcome else { return }
 
@@ -203,18 +205,37 @@ enum MenuLoop {
             // The frame follows the action onto its result screen: same
             // breadcrumb, one segment deeper, so output never floats without
             // a place.
-            terminal.out(terminal.menuBreadcrumb(page, item.crumb))
+            CLIRuntimeContext.menuTrail = (page.map { [$0] } ?? []) + [item.crumb]
+            terminal.out(terminal.menuBreadcrumb(CLIRuntimeContext.menuTrail))
             terminal.out("")
             await item.run()
+            // Keys mashed while the action ran (nothing was reading them)
+            // must not fire on the screen that comes next; drop them once,
+            // here at the boundary.
+            RawMode.discardPendingInput()
+            CLIRuntimeContext.menuTrail = []
 
             // Exit before pausing so the final output (e.g. uninstall's
             // summary) stays on screen and the program ends cleanly, with no
             // pointless "press Enter" on the way out.
             if item.shouldExitAfter() { return }
-            // A cancel said its one line already; asking for Enter on top of
-            // it is exactly the ceremony the user just stopped.
-            if item.pausesAfter, !CLIRuntimeContext.consumeCancelledCommand() {
-                MenuPrompt.pause(terminal)
+            let ending = CLIRuntimeContext.consumeCommandEnding()
+            if item.pausesAfter {
+                switch ending {
+                case .announcedCancel:
+                    // The cancel line needs a beat on screen before the
+                    // redraw wipes it, or it reads as a flicker of
+                    // unexplained text.
+                    try? await Task.sleep(for: .milliseconds(700))
+                case .silentCancel:
+                    break  // the answer to the question was the statement
+                case .completed:
+                    MenuPrompt.pause(terminal)
+                    // The pause was its own boundary too: a second Enter
+                    // mashed right after dismissing it must not re-fire
+                    // this item.
+                    RawMode.discardPendingInput()
+                }
             }
         }
     }

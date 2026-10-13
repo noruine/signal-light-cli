@@ -17,9 +17,10 @@ enum MenuSelector {
     static func choose(
         items: [String],
         terminal: Terminal,
+        trail: [String]?,
+        context: () -> [String],
         footerHint: String,
-        initialIndex: Int = 0,
-        header: () -> Void
+        initialIndex: Int = 0
     ) -> Outcome {
         guard !items.isEmpty else { return .quit }
 
@@ -27,7 +28,7 @@ enum MenuSelector {
         // stdin isn't a TTY (reused in a pipe/test), fall back to a plain
         // numbered prompt so the menu still works.
         guard let original = RawMode.enter() else {
-            return numberFallback(items: items, terminal: terminal, header: header)
+            return numberFallback(items: items, terminal: terminal, trail: trail, context: context)
         }
         defer {
             RawMode.restore(original)
@@ -39,7 +40,7 @@ enum MenuSelector {
 
         var selected = min(max(initialIndex, 0), items.count - 1)
         while true {
-            render(items: items, selected: selected, terminal: terminal, footerHint: footerHint, header: header)
+            render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
             switch readKey() {
             case .up:
                 selected = (selected - 1 + items.count) % items.count
@@ -63,38 +64,28 @@ enum MenuSelector {
 
     // MARK: - Rendering
 
-    private static func render(
+    static func render(
         items: [String],
         selected: Int,
         terminal: Terminal,
+        trail: [String]?,
+        context: () -> [String],
         footerHint: String,
-        header: () -> Void
+        emit: (String) -> Void = { print($0, terminator: "") }
     ) {
-        print("\u{1B}[H", terminator: "")  // cursor home; redraw over the previous frame
-        header()
-        // `\u{1B}[K` (erase to end of line) is appended to every redrawn line:
-        // the highlighted row (` ❯ text `, reverse-video, with a trailing
-        // space) is wider than the plain row (`   text`), so when the
-        // selection moves off a row, its old highlight's right-hand tail would
-        // otherwise linger as a stray reverse-video block. Clearing to EOL on
-        // each line wipes that residue in place.
-        let clearToEOL = "\u{1B}[K"
+        var body: [String] = []
         for (index, label) in items.enumerated() {
             let text = "\(index + 1). \(label)"
             if index == selected {
-                if terminal.useColor {
-                    print("\u{1B}[7m ❯ \(text) \u{1B}[0m\(clearToEOL)")
-                } else {
-                    print(" ❯ \(text)\(clearToEOL)")
-                }
+                body.append(terminal.useColor ? "\u{1B}[7m ❯ \(text) \u{1B}[0m" : " ❯ \(text)")
             } else {
-                print("   \(text)\(clearToEOL)")
+                body.append("   \(text)")
             }
         }
-        print(clearToEOL)
-        print("\(terminal.dimmed(footerHint))\(clearToEOL)")
-        print("\u{1B}[0J", terminator: "")  // erase anything left from a taller previous frame
-        fflush(stdout)
+        ScreenLayout.paint(
+            ScreenLayout.lines(terminal: terminal, trail: trail, context: context(), body: body, bar: footerHint),
+            emit: emit
+        )
     }
 
     // MARK: - Key input
@@ -132,8 +123,13 @@ enum MenuSelector {
 
     // MARK: - Non-TTY fallback
 
-    private static func numberFallback(items: [String], terminal: Terminal, header: () -> Void) -> Outcome {
-        header()
+    private static func numberFallback(items: [String], terminal: Terminal, trail: [String]?, context: () -> [String]) -> Outcome {
+        if let trail {
+            terminal.out(terminal.menuBreadcrumb(trail))
+        }
+        for line in context() {
+            terminal.out(line)
+        }
         for (index, label) in items.enumerated() {
             terminal.out("  \(index + 1). \(label)")
         }

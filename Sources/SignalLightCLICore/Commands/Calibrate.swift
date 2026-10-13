@@ -46,7 +46,7 @@ struct Calibrate: AsyncParsableCommand {
         terminal.out("")
         terminal.out("会逐个点亮引脚，请观察灯的颜色并回答。")
         guard Confirm.promptYesNo(terminal, "开始接线校准？", defaultAnswer: true) else {
-            CancelNotice.say("已取消。", terminal: terminal)
+            CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
 
@@ -122,6 +122,8 @@ struct Calibrate: AsyncParsableCommand {
     private func promptObservation() -> SignalLightWizardObservation? {
         FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮（Esc 取消）：".utf8))
 
+        // A key held from the device round-trip must not answer this pin.
+        RawMode.discardPendingInput()
         guard let original = RawMode.enter() else {
             let line = readLine(strippingNewline: true)?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
             FileHandle.standardError.write(Data("\n".utf8))

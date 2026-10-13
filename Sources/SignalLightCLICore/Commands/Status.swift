@@ -93,7 +93,12 @@ struct StatusSnapshot {
     }
 
     func printHumanReadable(terminal: Terminal) {
-        terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))信号灯")
+        // Inside the menu the breadcrumb already names the screen; only a
+        // bare `signal-light status` needs the product title of its own.
+        if !CLIRuntimeContext.isMenuSession {
+            terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))信号灯")
+            terminal.out("")
+        }
 
         terminal.out("    服务      \(terminal.statusDot(serviceIsRunning)) \(serviceDescription)")
 
@@ -116,13 +121,13 @@ struct StatusSnapshot {
     /// One compact line for the interactive menu's header: service state, the
     /// bluetooth link, and which bucket the light is showing right now. The
     /// log path and PIDs belong to `status`, not a menu header.
-    func printMenuHeader(terminal: Terminal) {
+    func menuHeaderLines(terminal: Terminal) -> [String] {
         var segments = ["服务 \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)"]
         if stateIsLive {
             segments.append("蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)")
             segments.append("当前 \(menuBucketDescription)")
         }
-        terminal.out("    " + segments.joined(separator: "   "))
+        return ["    " + segments.joined(separator: "   ")]
     }
 
     var menuServiceDescription: String {

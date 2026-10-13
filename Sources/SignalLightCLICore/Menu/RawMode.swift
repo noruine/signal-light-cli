@@ -18,9 +18,13 @@ enum RawMode {
 
     /// Switches stdin to cbreak mode and returns the previous settings for a
     /// later `restore`, or `nil` if stdin isn't a TTY or the call fails.
-    /// Always flushes type-ahead already buffered (`TCSAFLUSH`), so keys
-    /// pressed *before* the read starts (e.g. mashed during a slow action)
-    /// don't leak into the next prompt.
+    /// Keys typed while no reader was watching stay queued: a deliberate
+    /// Esc pressed while the next screen is still rebuilding must land.
+    /// Callers that want type-ahead dropped (keys mashed during a slow
+    /// action) do it themselves at their action's boundary via
+    /// `discardPendingInput()`. The one exception is the interrupt
+    /// watchers, which flush on entry so a stray pre-pressed Esc can't
+    /// cancel the scan or flash the user just started.
     static func enter() -> termios? { enter(interceptingInterrupts: false) }
 
     /// Same, but with `ISIG` off as well: Ctrl-C then arrives as the byte
@@ -46,7 +50,12 @@ enum RawMode {
                 cc[Int(VTIME)] = 0
             }
         }
-        guard tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == 0 else { return nil }
+        // The interrupt watchers still drop keys pressed before they armed
+        // (a stray pre-pressed Esc must not cancel the operation the user
+        // just started); every other reader keeps them, so a deliberate Esc
+        // pressed while the next screen rebuilds still lands.
+        let setMode: Int32 = interceptingInterrupts ? TCSAFLUSH : TCSADRAIN
+        guard tcsetattr(STDIN_FILENO, setMode, &raw) == 0 else { return nil }
         signalGuard.arm(original)
         return original
     }
@@ -55,6 +64,15 @@ enum RawMode {
         var original = original
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
         signalGuard.disarm()
+    }
+
+    /// Throws away keys typed while no reader was watching (mashed during a
+    /// slow action), so they can't fire on the screen that comes next.
+    /// Belongs at action boundaries only: the pickers never call it while
+    /// re-entering after a plain screen transition, where dropping input
+    /// would eat a deliberate keypress.
+    static func discardPendingInput() {
+        tcflush(STDIN_FILENO, TCIFLUSH)
     }
 
     /// What a just-read `Esc` byte (0x1B) turned out to be.

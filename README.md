@@ -72,7 +72,7 @@ Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ �
 ```
 
 - `Sources/SignalLightKit` — 产品核心：BLE 会话、灯效与设置、会话状态机、钩子协议（`Bridge/`）、Agent 安装器。
-- `Sources/SignalLightCLI` — 命令与交互菜单；`run` 子命令即守护进程本体。
+- `Sources/SignalLightCLICore` — 命令与交互菜单；`run` 子命令即守护进程本体。`Sources/SignalLightCLI` 是只含 `@main` 的薄入口（拆出来是为了测试目标能 import 核心模块）。
 - `Sources/SignalLightHooks` — 单文件转发程序，做完就退出，不阻塞 Agent。
 - 钩子协议与状态映射：[docs/bridge.md](docs/bridge.md)。
 

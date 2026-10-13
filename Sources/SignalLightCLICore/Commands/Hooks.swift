@@ -321,12 +321,11 @@ enum HooksAgentSetup {
             items: labels,
             preselected: preselected,
             terminal: terminal,
-            footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")]),
-            header: {
-                terminal.out(terminal.menuBreadcrumb("接入 Agent"))
-                terminal.out(terminal.dimmed("勾上想让信号灯跟随的 Agent，回车生效。"))
-                terminal.out("")
-            }
+            trail: CLIRuntimeContext.isMenuSession ? ["接入 Agent"] : nil,
+            context: {
+                ["勾上想让信号灯跟随的 Agent，回车生效。"]
+            },
+            footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")])
         ) else {
             // Backing out with Esc is not a result: the menu redraws the
             // previous page, and a one-shot command says "已取消。" itself.

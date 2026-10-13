@@ -13,13 +13,14 @@ enum MultiSelect {
         items: [String],
         preselected: Set<Int> = [],
         terminal: Terminal,
-        footerHint: String,
-        header: () -> Void
+        trail: [String]?,
+        context: () -> [String],
+        footerHint: String
     ) -> Set<Int>? {
         guard !items.isEmpty else { return [] }
 
         guard let original = RawMode.enter() else {
-            return typedFallback(items: items, preselected: preselected, terminal: terminal, header: header)
+            return typedFallback(items: items, preselected: preselected, terminal: terminal, trail: trail, context: context)
         }
         defer {
             RawMode.restore(original)
@@ -32,7 +33,7 @@ enum MultiSelect {
         var checked = preselected
         var cursor = 0
         while true {
-            render(items: items, checked: checked, cursor: cursor, terminal: terminal, footerHint: footerHint, header: header)
+            render(items: items, checked: checked, cursor: cursor, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
             switch readKey() {
             case .up:
                 cursor = (cursor - 1 + items.count) % items.count
@@ -60,34 +61,30 @@ enum MultiSelect {
 
     // MARK: - Rendering
 
-    private static func render(
+    static func render(
         items: [String],
         checked: Set<Int>,
         cursor: Int,
         terminal: Terminal,
+        trail: [String]?,
+        context: () -> [String],
         footerHint: String,
-        header: () -> Void
+        emit: (String) -> Void = { print($0, terminator: "") }
     ) {
-        let clearToEOL = "\u{1B}[K"
-        print("\u{1B}[H", terminator: "")
-        header()
+        var body: [String] = []
         for (index, label) in items.enumerated() {
             let box = checked.contains(index) ? "[✓]" : "[ ]"
             let line = "\(box) \(label)"
             if index == cursor {
-                if terminal.useColor {
-                    print("\u{1B}[7m ❯ \(line) \u{1B}[0m\(clearToEOL)")
-                } else {
-                    print(" ❯ \(line)\(clearToEOL)")
-                }
+                body.append(terminal.useColor ? "\u{1B}[7m ❯ \(line) \u{1B}[0m" : " ❯ \(line)")
             } else {
-                print("   \(line)\(clearToEOL)")
+                body.append("   \(line)")
             }
         }
-        print(clearToEOL)
-        print("\(terminal.dimmed(footerHint))\(clearToEOL)")
-        print("\u{1B}[0J", terminator: "")
-        fflush(stdout)
+        ScreenLayout.paint(
+            ScreenLayout.lines(terminal: terminal, trail: trail, context: context(), body: body, bar: footerHint),
+            emit: emit
+        )
     }
 
     // MARK: - Key input
@@ -125,8 +122,13 @@ enum MultiSelect {
 
     // MARK: - Non-TTY fallback
 
-    private static func typedFallback(items: [String], preselected: Set<Int>, terminal: Terminal, header: () -> Void) -> Set<Int>? {
-        header()
+    private static func typedFallback(items: [String], preselected: Set<Int>, terminal: Terminal, trail: [String]?, context: () -> [String]) -> Set<Int>? {
+        if let trail {
+            terminal.out(terminal.menuBreadcrumb(trail))
+        }
+        for line in context() {
+            terminal.out(line)
+        }
         for (index, label) in items.enumerated() {
             let mark = preselected.contains(index) ? "[✓]" : "[ ]"
             terminal.out("  \(index + 1). \(mark) \(label)")

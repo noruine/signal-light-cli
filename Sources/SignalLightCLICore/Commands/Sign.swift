@@ -46,7 +46,7 @@ struct Sign: AsyncParsableCommand {
         }
 
         guard try confirmKeychainWrite(terminal: terminal) else {
-            CancelNotice.say("已取消。", terminal: terminal)
+            CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
 

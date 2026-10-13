@@ -34,10 +34,20 @@ enum PairFlow {
         first: Bool
     ) async throws {
         let log = RestrainedLog(url: paths.logURL)
+        // Breadcrumbs are menu chrome: inside the menu the result screen
+        // already prints it (and the picker continues that trail); a bare
+        // CLI run stays Unix-plain and shows none.
+        let menuTrail = CLIRuntimeContext.menuTrail
+        let pickerTrail: [String]? = CLIRuntimeContext.isMenuSession
+            ? (menuTrail.isEmpty ? ["配对设备"] : menuTrail)
+            : nil
         let progress = ScanProgress(terminal: terminal)
 
         let outcome = try await runScan(timeout: timeout, log: log, progress: progress, terminal: terminal)
         progress.finish()
+        // Keys pressed while the scan ran (nothing was reading them) must
+        // not answer the device picker that may follow; drop them once.
+        RawMode.discardPendingInput()
 
         let discovered: [SignalLightBLEDaemon.DiscoveredDevice]
         switch outcome {
@@ -64,7 +74,7 @@ enum PairFlow {
             )
         }
 
-        guard let chosen = try selectDevice(from: discovered, terminal: terminal, device: device, first: first) else {
+        guard let chosen = try selectDevice(from: discovered, terminal: terminal, device: device, first: first, trail: pickerTrail) else {
             CancelNotice.say("已取消配对。", terminal: terminal)
             return
         }
@@ -168,7 +178,8 @@ enum PairFlow {
         from discovered: [SignalLightBLEDaemon.DiscoveredDevice],
         terminal: Terminal,
         device: String?,
-        first: Bool
+        first: Bool,
+        trail: [String]?
     ) throws -> SignalLightBLEDaemon.DiscoveredDevice? {
         if let device {
             guard let match = discovered.first(where: {
@@ -204,11 +215,11 @@ enum PairFlow {
         let outcome = MenuSelector.choose(
             items: labels,
             terminal: terminal,
-            footerHint: terminal.keyBar([.move, .enter("确认"), .escape("取消")]),
-            header: {
-                terminal.out("\(terminal.emoji(CLIGlyph.search))找到 \(discovered.count) 个设备，选择要配对的：")
-                terminal.out("")
-            }
+            trail: trail,
+            context: {
+                ["找到 \(discovered.count) 个设备，选择要配对的："]
+            },
+            footerHint: terminal.keyBar([.move, .enter("确认"), .escape("取消")])
         )
         guard case let .selected(index) = outcome else {
             return nil  // backed out of the picker; not an error

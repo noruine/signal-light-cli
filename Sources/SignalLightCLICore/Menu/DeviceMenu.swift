@@ -11,10 +11,9 @@ enum DeviceMenu {
         await MenuLoop.run(
             terminal: terminal,
             page: "设备管理",
-            header: {
+            context: {
                 let deviceName = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL))?.name
-                terminal.out(terminal.dimmed(deviceName.map { "当前：\($0)" } ?? "还没配对过设备"))
-                terminal.out("")
+                return [deviceName.map { "当前：\($0)" } ?? "还没配对过设备"]
             },
             buildItems: {
                 let paired = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL)) != nil

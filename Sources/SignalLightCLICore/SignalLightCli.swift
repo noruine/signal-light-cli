@@ -26,7 +26,6 @@ struct GlobalOptions: ParsableArguments {
     }
 }
 
-@main
 struct SignalLightCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "signal-light",
@@ -64,18 +63,23 @@ struct SignalLightCLI: AsyncParsableCommand {
         ]
     )
 
-    /// Overrides ArgumentParser's default `main()` only to translate our own
-    /// `CLIError` into the specific `sysexits.h` exit code it carries —
-    /// ArgumentParser's own errors (`--help`, `--version`, usage validation)
-    /// still fall through to `exit(withError:)` untouched, so those keep
-    /// their normal behavior.
+}
+
+/// The executable entry: a bare interactive invocation drops straight into
+/// the menu, everything else takes the normal parse. It lives here — not in
+/// the executable target — so the test target can import this module.
+public enum SignalLightCLIEntry {
+    /// Translates our own `CLIError` into the specific `sysexits.h` exit code
+    /// it carries — ArgumentParser's own errors (`--help`, `--version`,
+    /// usage validation) still fall through to `exit(withError:)` untouched,
+    /// so those keep their normal behavior.
     ///
-    /// A bare `signal-light` (no arguments at all, interactive terminal) skips
-    /// ArgumentParser and drops straight into the `InteractiveMenu`. That is
-    /// the only special case: every other invocation — including `config`,
-    /// which resolves to its `defaultSubcommand` (`show`) exactly as
-    /// ArgumentParser does — takes the normal command path.
-    static func main() async {
+    /// A bare `signal-light` (no arguments at all, interactive terminal)
+    /// skips ArgumentParser and drops straight into the `InteractiveMenu`.
+    /// That is the only special case: every other invocation — including
+    /// `config`, which resolves to its `defaultSubcommand` (`show`) exactly
+    /// as ArgumentParser does — takes the normal command path.
+    public static func run() async {
         // `Terminal(colorMode:)` is a plain designed initializer, unlike
         // `GlobalOptions()` — constructing a `ParsableArguments` type via its
         // implicit memberwise init does *not* properly initialize
@@ -93,7 +97,7 @@ struct SignalLightCLI: AsyncParsableCommand {
         }
 
         do {
-            var command = try parseAsRoot()
+            var command = try SignalLightCLI.parseAsRoot()
             if var asyncCommand = command as? AsyncParsableCommand {
                 try await asyncCommand.run()
             } else {
@@ -108,7 +112,7 @@ struct SignalLightCLI: AsyncParsableCommand {
             FileHandle.standardError.write(Data("error: \(cliError.message)\n".utf8))
             Darwin.exit(cliError.exitCode.rawValue)
         } catch {
-            exit(withError: error)
+            SignalLightCLI.exit(withError: error)
         }
     }
 }

@@ -20,10 +20,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "SignalLightCLI",
-            dependencies: [
-                "SignalLightKit",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
+            dependencies: ["SignalLightCLICore"],
             // Info.plist is embedded directly into the binary's __TEXT,__info_plist
             // section via the linker flags below — the standard way to give a bare
             // SPM executable a CFBundleIdentifier and a Bluetooth usage string.
@@ -37,6 +34,13 @@ let package = Package(
                 .linkedFramework("CoreBluetooth"),
             ]
         ),
+        .target(
+            name: "SignalLightCLICore",
+            dependencies: [
+                "SignalLightKit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
         .executableTarget(
             name: "SignalLightHooks",
             dependencies: ["SignalLightKit"]
@@ -44,6 +48,10 @@ let package = Package(
         .testTarget(
             name: "SignalLightKitTests",
             dependencies: ["SignalLightKit"]
+        ),
+        .testTarget(
+            name: "SignalLightCLITests",
+            dependencies: ["SignalLightCLICore"]
         ),
     ]
 )

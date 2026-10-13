@@ -12,9 +12,8 @@ enum ConfigMenu {
         await MenuLoop.run(
             terminal: terminal,
             page: "灯效设置",
-            header: {
-                terminal.out(terminal.dimmed("选择状态并调整灯效，改动可直接在灯上预览。"))
-                terminal.out("")
+            context: {
+                ["选择状态并调整灯效，改动可直接在灯上预览。"]
             },
             buildItems: {
                 let settings = (try? SignalLightSettingsStore.load(from: paths.settingsJSONURL)) ?? .default
@@ -47,10 +46,10 @@ enum ConfigMenu {
             return
         }
         let current = settings.effect(for: bucket)
-        let bucketTitle = "\(SignalLightBucketDisplay.emoji(bucket)) \(SignalLightBucketDisplay.name(bucket))"
+        let bucketName = SignalLightBucketDisplay.name(bucket)
 
-        guard let type = pickType(current: current, bucketTitle: bucketTitle, terminal: terminal) else { return }
-        guard let colors = pickColors(current: current, bucketTitle: bucketTitle, terminal: terminal) else { return }
+        guard let type = pickType(current: current, bucketName: bucketName, terminal: terminal) else { return }
+        guard let colors = pickColors(current: current, bucketName: bucketName, terminal: terminal) else { return }
 
         var interval = 0
         if type != .solid {
@@ -74,20 +73,22 @@ enum ConfigMenu {
 
     /// Effect type via an arrow-key list (no typing a code to look up). The
     /// current value is pre-highlighted so a bare Enter keeps it.
-    private static func pickType(current: SignalLightEffect, bucketTitle: String, terminal: Terminal) -> SignalLightEffectType? {
+    private static func pickType(current: SignalLightEffect, bucketName: String, terminal: Terminal) -> SignalLightEffectType? {
         let types: [SignalLightEffectType] = [.solid, .blink, .cycle, .breathe]
         let labels = types.map { "\(ConfigFormat.typeName($0))  \(terminal.dimmed($0.rawValue))" }
         let startIndex = types.firstIndex(of: current.type) ?? 0
         let outcome = MenuSelector.choose(
             items: labels,
             terminal: terminal,
+            trail: ["灯效设置", bucketName],
+            context: {
+                [
+                    "第 1 步：怎么亮",
+                    "当前：\(ConfigFormat.describe(current))",
+                ]
+            },
             footerHint: terminal.keyBar([.move, .enter("确认"), .escape("取消")]),
-            initialIndex: startIndex,
-            header: {
-                terminal.out("\(bucketTitle)：第 1 步，怎么亮")
-                terminal.out(terminal.dimmed("当前：\(ConfigFormat.describe(current))"))
-                terminal.out("")
-            }
+            initialIndex: startIndex
         )
         guard case let .selected(index) = outcome else { return nil }
         return types[index]
@@ -97,7 +98,7 @@ enum ConfigMenu {
     /// the current selection. Fixed 红→黄→绿 order for the chosen subset; the
     /// 专业路 `config set --colors GYR` still allows an arbitrary cycle order
     /// for the rare case that needs it.
-    private static func pickColors(current: SignalLightEffect, bucketTitle: String, terminal: Terminal) -> [SignalLightColor]? {
+    private static func pickColors(current: SignalLightEffect, bucketName: String, terminal: Terminal) -> [SignalLightColor]? {
         let palette: [SignalLightColor] = [.red, .yellow, .green]
         let labels = palette.map(ConfigFormat.colorName)
         let preselected = Set(current.colors.compactMap { palette.firstIndex(of: $0) })
@@ -107,11 +108,11 @@ enum ConfigMenu {
                 items: labels,
                 preselected: preselected,
                 terminal: terminal,
-                footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")]),
-                header: {
-                    terminal.out("\(bucketTitle)：第 2 步，哪些颜色")
-                    terminal.out("")
-                }
+                trail: ["灯效设置", bucketName],
+                context: {
+                    ["第 2 步：哪些颜色"]
+                },
+                footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")])
             )
             guard let chosen else { return nil }
             if chosen.isEmpty {
@@ -163,7 +164,7 @@ enum ConfigMenu {
 
     private static func confirmReset(terminal: Terminal) async {
         guard Confirm.promptYesNo(terminal, "所有灯效恢复默认？", defaultAnswer: false) else {
-            CancelNotice.say("没有改动。", terminal: terminal)
+            CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
         await MenuCommandRunner.run(["config", "reset"], terminal: terminal)

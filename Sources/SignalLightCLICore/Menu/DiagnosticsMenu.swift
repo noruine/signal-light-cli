@@ -11,11 +11,10 @@ enum DiagnosticsMenu {
         await MenuLoop.run(
             terminal: terminal,
             page: "诊断",
-            header: {
-                if FileManager.default.fileExists(atPath: SignalLightDaemonPaths.current().binURL.path) {
-                    terminal.out(terminal.dimmed("版本 \(AppVersion.current())"))
-                }
-                terminal.out("")
+            context: {
+                FileManager.default.fileExists(atPath: SignalLightDaemonPaths.current().binURL.path)
+                    ? ["版本 \(AppVersion.current())"]
+                    : []
             },
             buildItems: {
                 [

@@ -13,10 +13,9 @@ enum ServiceMenu {
         await MenuLoop.run(
             terminal: terminal,
             page: "服务",
-            header: {
+            context: {
                 let snapshot = StatusSnapshot.current(paths: paths)
-                terminal.out(terminal.dimmed("状态：\(snapshot.menuServiceDescription)"))
-                terminal.out("")
+                return ["状态：\(snapshot.menuServiceDescription)"]
             },
             buildItems: {
                 let snapshot = StatusSnapshot.current(paths: paths)

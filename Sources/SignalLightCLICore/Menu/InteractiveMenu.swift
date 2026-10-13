@@ -17,13 +17,13 @@ enum InteractiveMenu {
         await MenuLoop.run(
             terminal: terminal,
             escapeHint: .escape("退出"),
-            header: {
+            context: {
                 let snapshot = StatusSnapshot.current(paths: paths)
-                snapshot.printMenuHeader(terminal: terminal)
+                var lines = snapshot.menuHeaderLines(terminal: terminal)
                 if let hint = nextStepHint(paths: paths, snapshot: snapshot) {
-                    terminal.out("\(terminal.emoji(CLIGlyph.next))\(hint)")
+                    lines.append("\(terminal.emoji(CLIGlyph.next))\(hint)")
                 }
-                terminal.out("")
+                return lines
             },
             buildItems: {
                 let snapshot = StatusSnapshot.current(paths: paths)
@@ -31,6 +31,11 @@ enum InteractiveMenu {
                 return buildItems(state: state, snapshot: snapshot, paths: paths, terminal: terminal)
             }
         )
+        // Leaving the menu empties the screen at once: with the menu still
+        // drawn, a slow shell-prompt redraw reads as "Esc did nothing", and
+        // the extra Esc presses that follow land in the arriving prompt.
+        print("\u{1B}[2J\u{1B}[H", terminator: "")
+        fflush(stdout)
     }
 
     /// One-line "here's where you are" nudge shown above the list until the

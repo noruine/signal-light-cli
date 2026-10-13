@@ -6,18 +6,15 @@ import Foundation
 /// not guard against piped stdin itself, since the non-interactive path
 /// (require `--yes`) is a distinct, explicit branch in each command.
 public enum Confirm {
-    /// A single-line 是/否 picker, so confirming reads exactly like every
-    /// other selection in this CLI (arrows to land, Enter to confirm, Esc to
-    /// cancel) instead of a typed `[y/N]` whose behavior on a stray key is
-    /// unclear. Arrows *land on* an answer — ↑/← is 是, ↓/→ is 否 — so a
-    /// repeated or held key never flips the answer back; space still toggles.
-    /// `question` stays short (callers put context on its own line above):
-    /// the picker repaints in place, and a line wider than the terminal
-    /// would scroll a row on every repaint. Renders inline (no screen clear)
-    /// so preceding output — a calibration result, an uninstall summary —
-    /// stays visible to inform the choice. `defaultAnswer` sets which side
-    /// starts highlighted; Esc returns it. Falls back to a typed y/n prompt
-    /// when stdin isn't a TTY.
+    /// A 是/否 picker carrying the same frame as every other screen: the
+    /// question with its two answers, a blank line, then the key bar on its
+    /// own bottom line. Arrows *land on* an answer — ↑/← is 是, ↓/→ is 否 —
+    /// so a repeated or held key never flips the answer back; space still
+    /// toggles. `question` stays short (callers put context on its own line
+    /// above). Renders in place (no screen clear) so preceding output — a
+    /// calibration result, an uninstall summary — stays visible to inform
+    /// the choice. `defaultAnswer` sets which side starts highlighted; Esc
+    /// returns it. Falls back to a typed y/n prompt when stdin isn't a TTY.
     public static func promptYesNo(_ terminal: Terminal, _ question: String, defaultAnswer: Bool = false) -> Bool {
         guard let original = RawMode.enter() else {
             return typedFallback(terminal, question, defaultAnswer: defaultAnswer)
@@ -30,11 +27,18 @@ public enum Confirm {
 
         var yes = defaultAnswer
         var drawn: Bool?
+        var frameHeight = 0
         while true {
             // Repaint only when the shown answer changes, so a repeated or
             // held key never scrubs the screen.
             if drawn != yes {
-                draw(terminal, question: question, yes: yes)
+                if frameHeight > 0 {
+                    writeStderr("\u{1B}[\(frameHeight - 1)A")  // back to the question line
+                    writeStderr("\u{1B}[J")                    // wipe the old frame
+                }
+                let lines = frame(terminal, question: question, yes: yes)
+                frameHeight = lines.count
+                writeStderr("\r\u{1B}[K" + lines.joined(separator: "\n\r\u{1B}[K"))
                 drawn = yes
             }
             switch readKey() {
@@ -54,11 +58,21 @@ public enum Confirm {
         }
     }
 
-    private static func draw(_ terminal: Terminal, question: String, yes: Bool) {
+    /// The frame every yes/no question shares: the question with both
+    /// answers as the body, the shell's blank, then the key bar — composed
+    /// through `ScreenLayout` so it can never drift from any other screen.
+    /// No breadcrumb of its own: the question continues the screen that
+    /// asked it (the confirm renders inline, without a clear).
+    static func frame(_ terminal: Terminal, question: String, yes: Bool) -> [String] {
         let yesLabel = optionLabel(terminal, "是", selected: yes)
         let noLabel = optionLabel(terminal, "否", selected: !yes)
-        let hint = terminal.dimmed(terminal.keyBar([.move, .enter("确认"), .escape("取消")]))
-        writeStderr("\r\u{1B}[K\(question)  \(yesLabel)  \(noLabel)   \(hint)")
+        return ScreenLayout.lines(
+            terminal: terminal,
+            trail: nil,
+            context: [],
+            body: ["\(question)  \(yesLabel)  \(noLabel)"],
+            bar: terminal.keyBar([.move, .enter("确认"), .escape("取消")])
+        )
     }
 
     private static func optionLabel(_ terminal: Terminal, _ text: String, selected: Bool) -> String {

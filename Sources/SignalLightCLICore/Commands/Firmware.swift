@@ -121,7 +121,7 @@ struct Firmware: AsyncParsableCommand {
                 // one flashing route with no version check was also the one
                 // with no "don't unplug it" line.
                 guard confirmProceed(terminal: terminal) else {
-                    CancelNotice.say("已取消。", terminal: terminal)
+                    CLIRuntimeContext.markCommandCancelled(.silentCancel)
                     return nil
                 }
                 return (URL(fileURLWithPath: (file as NSString).expandingTildeInPath), isDownloaded: false)
@@ -138,7 +138,7 @@ struct Firmware: AsyncParsableCommand {
             }
 
             guard confirmProceed(terminal: terminal) else {
-                CancelNotice.say("已取消。", terminal: terminal)
+                CLIRuntimeContext.markCommandCancelled(.silentCancel)
                 return nil
             }
             terminal.progress("正在下载固件（\(info.hardware)，最长约 1 分钟，按 Ctrl-C 取消）…")

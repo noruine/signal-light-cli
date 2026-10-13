@@ -20,7 +20,8 @@ struct Uninstall: AsyncParsableCommand {
         let paths = SignalLightDaemonPaths.current()
 
         guard try confirmDestructiveAction(terminal: terminal) else {
-            CancelNotice.say("没有卸载任何内容。", terminal: terminal)
+            // Answering the question was the statement; nothing to add.
+            CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
         let alsoRemoveHooks = confirmHooksRemoval(terminal: terminal)

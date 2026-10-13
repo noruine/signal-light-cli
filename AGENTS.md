@@ -30,8 +30,9 @@ because an agent once paired with the wrong one.
 - `Sources/SignalLightKit` — the product core: BLE sessions, effects and
   settings, the session registry, the hook protocol (`Bridge/`), agent
   installers. No UI or app concerns belong here.
-- `Sources/SignalLightCLI` — commands, interactive menu, daemon runner.
-  `run` is the daemon itself.
+- `Sources/SignalLightCLICore` — commands, interactive menu, daemon runner.
+  `run` is the daemon itself. `Sources/SignalLightCLI` is the thin `@main`
+  shell that exists only so tests can import the core.
 - `Sources/SignalLightHooks` — fire-and-forget forwarder, one file.
 - `Tests/SignalLightKitTests` — Swift Testing. Cover the key behavior (state
   machine, protocol round trip, mappings, stores), never chase percentages.
@@ -68,8 +69,15 @@ hardware.
 - User-facing copy is standard, natural Chinese; the 了 particle is banned
   outside 不了 / 为了 / 除了 (`make lint` enforces it). One vocabulary for
   results: 已X for a finished action, X完成 for a finished flow, X失败 for a
-  failed one, 无法X for an environment limit, 已取消X for a cancel. A cancel
-  says one line and returns; only output worth reading asks for a keypress.
+  failed one, 无法X for an environment limit, 已取消X for a cancel. Backing
+  out of a yes/no question says nothing — the answer is the statement; a
+  cancel that interrupts running work says its one line and returns. Only
+  output worth reading asks for a keypress.
+- Every interactive screen renders through `ScreenLayout` — breadcrumb,
+  blank, context, blank, body, blank, key bar, only the footer dimmed —
+  so spacing and color roles cannot drift between screens. The breadcrumb
+  is menu chrome: bare CLI runs stay Unix-plain and pass no trail. `make
+  lint` bans stale hint forms.
 - Nothing touches the machine silently: an action that writes files, the
   keychain, or launchd is either a command the user typed or one they
   confirmed first, with the consequences said out loud.
