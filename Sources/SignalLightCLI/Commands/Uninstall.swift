@@ -53,7 +53,7 @@ struct Uninstall: AsyncParsableCommand {
         let removedDirs = Set(report.removedDirs.map(\.path))
         let cliFiles = [
             paths.binURL, paths.hooksBinaryURL, paths.deviceJSONURL,
-            paths.stateJSONURL, paths.settingsJSONURL, paths.logURL,
+            paths.stateJSONURL, paths.settingsJSONURL, paths.buildJSONURL, paths.logURL,
         ]
         if removedDirs.contains(PathText.abbreviated(paths.cliRootDir))
             || removedDirs.contains(paths.binDir.path)

@@ -62,7 +62,7 @@ public struct LaunchAgentControl {
     public func setAutostart(_ enabled: Bool) throws {
         let binaryPath = installedBinaryPath() ?? paths.binURL.path
         guard FileManager.default.fileExists(atPath: binaryPath) else {
-            throw CLIError(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"), exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没装，请在仓库里运行 make install。", menu: "还没装。"), exitCode: .noInput)
         }
         try writePlist(binaryPath: binaryPath, runAtLoad: enabled)
     }

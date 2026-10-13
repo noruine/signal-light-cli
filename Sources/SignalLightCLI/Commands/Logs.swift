@@ -24,7 +24,11 @@ struct Logs: AsyncParsableCommand {
         }
 
         guard FileManager.default.fileExists(atPath: paths.logURL.path) else {
-            throw CLIError("还没有日志，服务应该从未启动过。", exitCode: .noInput)
+            // A service that never started is a normal state, not a failure
+            // of this command: say so plainly and point at where the log
+            // will be.
+            terminal.out("还没有日志：服务应该从未启动过。启动服务后，日志写在 \(displayPath(paths.logURL))。")
+            return
         }
 
         terminal.progress("\(terminal.emoji(CLIGlyph.logs))\(displayPath(paths.logURL))（末尾 \(lines) 行）")

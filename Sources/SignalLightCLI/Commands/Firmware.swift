@@ -275,7 +275,7 @@ enum FirmwareSupport {
 
         guard let device = try SignalLightStores.loadPairedDevice(from: paths.deviceJSONURL),
               let deviceID = UUID(uuidString: device.identifier) else {
-            throw CLIError("还没配对；也可以自行指定版本号：--current x.y.z", exitCode: .noInput)
+            throw CLIError("还没配对，读不到灯上的固件版本；先配对，或自行指定版本号：--current x.y.z。", exitCode: .noInput)
         }
 
         let control = LaunchAgentControl(paths: paths)

@@ -94,6 +94,13 @@ public struct SignalLightDaemonPaths: Sendable {
         cliRootDir.appendingPathComponent("settings.json")
     }
 
+    /// Where the install records which checkout it was built from, so a
+    /// later `upgrade` from the installed copy can tell whether the source
+    /// has moved on.
+    public var buildJSONURL: URL {
+        cliRootDir.appendingPathComponent("build.json")
+    }
+
     public var logURL: URL {
         cliRootDir.appendingPathComponent("signal-light.log")
     }
@@ -144,7 +151,7 @@ public struct SignalLightDaemonPaths: Sendable {
     /// gone the now-dangling symlink would stop reporting as "exists" and a
     /// naive sequential cleanup would leave it behind forever.
     public var ownedFiles: [URL] {
-        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, logURL, launchAgentPlistURL]
+        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, buildJSONURL, logURL, launchAgentPlistURL]
     }
 
     /// Socket files this CLI writes at runtime, which must only be removed

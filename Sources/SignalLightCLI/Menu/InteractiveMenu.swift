@@ -63,7 +63,7 @@ enum InteractiveMenu {
         // renumbering the list under the user's cursor.
         if !state.toolInstalled {
             items.append(MenuChoice("\(terminal.emoji(CLIGlyph.package))安装 signal-light 到本机") {
-                await MenuCommandRunner.run(["install"], terminal: terminal)
+                await MenuCommandRunner.run(["upgrade"], terminal: terminal)
             })
         } else if snapshot.jobInfo.isLoaded || state.serviceRegistered {
             // Registered (or running) means there is something to control, even

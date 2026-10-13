@@ -11,7 +11,7 @@ struct Sign: AsyncParsableCommand {
         discussion: """
         macOS 按签名身份记录蓝牙权限：临时签名每次重建都换，权限会失效。
         sign 创建一张本机自签名证书（只进登录钥匙串），用它签名已安装的
-        程序；之后每次 install / upgrade 都自动沿用这个签名。
+        程序；之后每次安装、更新都自动沿用这个签名。
 
         创建证书时 macOS 请求一次授权；后台服务在运行的话，签名后会重启
         一次并再次请求蓝牙权限。
@@ -28,7 +28,7 @@ struct Sign: AsyncParsableCommand {
         let installedBinaries = [paths.binURL, paths.hooksBinaryURL]
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         guard !installedBinaries.isEmpty else {
-            throw CLIError("还没装，请先运行 signal-light install。", exitCode: .noInput)
+            throw CLIError("还没装，请在仓库里运行 make install。", exitCode: .noInput)
         }
 
         let unstableBinaries = installedBinaries.filter { binary in

@@ -33,10 +33,10 @@ struct SignalLightCLI: AsyncParsableCommand {
         abstract: "红绿灯后台服务：不用开 macOS App 的原生 CLI。",
         discussion: """
         直接运行不带任何参数的 signal-light 会进入交互菜单，跟着选就行。
+        第一次装到本机：在仓库里运行 make install（更新同样用它）。
 
         常用命令（写脚本或熟练后）：
-          signal-light install        安装到本机（一次性）
-          signal-light upgrade        升级到新的构建（配对与配置保留）
+          signal-light upgrade        检查有没有新代码并升级（配对与配置保留）
           signal-light pair           配对你的红绿灯
           signal-light service start  启动后台服务
           signal-light hooks install  接入 Claude Code / Codex（会让你选）
@@ -47,7 +47,6 @@ struct SignalLightCLI: AsyncParsableCommand {
         subcommands: [
             Pair.self,
             Unpair.self,
-            Install.self,
             Upgrade.self,
             Uninstall.self,
             Sign.self,

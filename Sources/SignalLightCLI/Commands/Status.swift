@@ -180,7 +180,7 @@ struct StatusSnapshot {
             return stopped
         }
         if !toolInstalled {
-            return "未安装 — 运行 signal-light install"
+            return "未安装 — 在仓库里运行 make install"
         }
         if runAtLoad == nil {
             return "未启动 — 运行 signal-light service start"

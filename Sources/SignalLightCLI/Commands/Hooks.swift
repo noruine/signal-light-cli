@@ -138,7 +138,7 @@ enum HooksAgentSupport {
     /// `swift build`, and the installed copy alike).
     static func locateHooksBinary() throws -> URL {
         guard let url = HooksBinaryLocator.locate(
-            executableDirectory: Bundle.main.executableURL?.deletingLastPathComponent()
+            executableDirectory: Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
         ) else {
             throw CLIError(
                 "没有找到 agent-hooks。请运行 swift build --product agent-hooks，并把它和 signal-light 放在同一个 .build 目录。",

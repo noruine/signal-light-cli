@@ -83,7 +83,7 @@ struct Doctor: AsyncParsableCommand {
             if FileManager.default.fileExists(atPath: paths.binURL.path) {
                 return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "还没启动，请运行 signal-light service start。", menu: "还没启动。"))
             }
-            return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"))
+            return DoctorCheck(status: .warn, title: "后台服务", detail: ContextText.choose(cli: "还没装，请在仓库里运行 make install。", menu: "还没装。"))
         }
 
         let jobInfo = control.jobInfo()

@@ -55,6 +55,18 @@ public struct SystemProcessRunner: ProcessRunning {
             stderr: String(data: errCollector.data, encoding: .utf8) ?? ""
         )
     }
+
+    /// Runs a child with the parent's stdio inherited, so a long interactive
+    /// step (the `make install` behind an upgrade) prints as it goes instead
+    /// of appearing in one burst after the wait.
+    public func runInheritingStdio(_ executableURL: URL, arguments: [String]) throws -> Int32 {
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
 }
 
 /// A lock-guarded box so each pipe can be drained on its own background queue
@@ -78,4 +90,5 @@ private final class OutputCollector: @unchecked Sendable {
 
 public enum SystemBinary {
     public static let launchctl = URL(fileURLWithPath: "/bin/launchctl")
+    public static let make = URL(fileURLWithPath: "/usr/bin/make")
 }

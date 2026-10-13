@@ -25,7 +25,7 @@ struct Service: AsyncParsableCommand {
         // at it — otherwise the plist would reference a path that vanishes
         // with the build directory.
         guard FileManager.default.fileExists(atPath: paths.binURL.path) else {
-            throw CLIError(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"), exitCode: .noInput)
+            throw CLIError(ContextText.choose(cli: "还没装，请在仓库里运行 make install。", menu: "还没装。"), exitCode: .noInput)
         }
 
         let device: SignalLightPairedDevice?
@@ -178,7 +178,7 @@ struct Service: AsyncParsableCommand {
                     if FileManager.default.fileExists(atPath: paths.binURL.path) {
                         terminal.out("开机自启：\(terminal.dimmed("未开启"))（还没登记服务，下次登录才生效）")
                     } else {
-                        terminal.out(ContextText.choose(cli: "还没装，请运行 signal-light install。", menu: "还没装。"))
+                        terminal.out(ContextText.choose(cli: "还没装，请在仓库里运行 make install。", menu: "还没装。"))
                     }
                     return
                 }

@@ -19,13 +19,15 @@ signal-light                # 不带参数进交互菜单
 
 只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`；直接 `swift build` 需要自己加）。之后新开终端直接敲 `signal-light`。
 
-升级就是重新跑 `make install`（仓库有远端的话先 `git pull` 拿新代码）：配对、灯效配置、launchd 设置一律保留；后台服务在运行的话自动重启。已经构建过的话，也可以直接 `.build/release/signal-light upgrade`。
+升级就是重新跑 `make install`（仓库有远端的话先 `git pull` 拿新代码）：配对、灯效配置、launchd 设置一律保留；后台服务在运行的话自动重启。没有变化时说一句「已是最新」，不会白装一遍。装好后敲 `signal-light upgrade` 也会检查源码库：没有新代码就说「已是最新」，有就问你要不要升级。已经构建过的话，也可以直接 `.build/release/signal-light upgrade`。
 
 ## 命令
 
+从仓库装到本机用 `make install`（见快速开始）；下表是本机侧的命令。
+
 | 命令 | 作用 |
 | --- | --- |
-| `install` / `upgrade` / `uninstall` | 安装 / 升级到新构建 / 卸载（可一并移除 Agent 钩子） |
+| `upgrade` / `uninstall` | 检查有没有新代码并升级 / 卸载（可一并移除 Agent 钩子） |
 | `sign` | 可选：配置固定签名，重建程序后蓝牙授权继续有效 |
 | `pair` / `unpair` | 配对红绿灯 / 忘掉已配对设备（会先停服务） |
 | `service start\|stop\|restart\|autostart` | 后台服务与开机自启 |

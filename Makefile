@@ -11,9 +11,9 @@ CONFIGURATION ?= release
 build:  ## Build both executables ($(CONFIGURATION))
 	swift build --build-system native -c $(CONFIGURATION)
 
-# The CLI's `upgrade` is the install-or-upgrade step: it installs when
-# nothing is there yet and words the result accordingly; `install` is the
-# repo-level verb people expect after a `git pull`.
+# This target is the repo-level `install` people expect after a `git pull`:
+# build, then hand the fresh binaries to the CLI's `upgrade` (first run
+# installs, later runs update).
 install: build  ## Build, then install or upgrade ~/.signal-light
 	.build/$(CONFIGURATION)/signal-light upgrade
 

@@ -1,9 +1,10 @@
 import Foundation
 import SignalLightKit
 
-/// The machine-side install steps, shared by `install` and `upgrade` so the
-/// two entry points cannot drift apart. Every step is idempotent; the only
-/// things a caller adds are wording and its own preconditions.
+/// The machine-side install steps behind `upgrade`: a fresh machine gets its
+/// first installation, an existing one gets updated — the steps are the same
+/// either way. Every step is idempotent; the caller adds wording and its own
+/// preconditions.
 enum Installation {
     struct Outcome {
         /// Whether an installation was already in place when the steps
@@ -19,9 +20,8 @@ enum Installation {
     /// identity — that opens an authorization prompt and belongs to
     /// `signal-light sign` alone.
     ///
-    /// The outcome is deliberately discardable: only `upgrade` words it, and
-    /// `install` calling it purely for the steps should not need `_ =`.
-    @discardableResult
+    /// The outcome tells the caller whether to word the result as an install
+    /// or an upgrade.
     static func apply(paths: SignalLightDaemonPaths, terminal: Terminal) throws -> Outcome {
         let wasInstalled = FileManager.default.fileExists(atPath: paths.binURL.path)
 
@@ -30,20 +30,24 @@ enum Installation {
         installHooksBinary(paths: paths, terminal: terminal)
         signInstalledBinaries(paths: paths, terminal: terminal)
         restartRunningService(paths: paths, terminal: terminal)
+        recordBuildIdentity(paths: paths, terminal: terminal)
 
         return Outcome(wasInstalled: wasInstalled)
     }
 
     /// Whether this process is the installed copy itself, as opposed to a
-    /// fresh build run out of `.build/release`. Re-running `install` from the
-    /// installed copy is a valid repair; `upgrade` from it has nothing new to
-    /// offer.
+    /// fresh build run out of `.build/release`. `upgrade` from the installed
+    /// copy has nothing new to offer, so it refuses.
     static func isRunningInstalledCopy(paths: SignalLightDaemonPaths) -> Bool {
         guard let currentExecutable = Bundle.main.executableURL else { return false }
-        return currentExecutable.standardizedFileURL == paths.binURL.standardizedFileURL
+        // Reached through the PATH link (`~/.local/bin/signal-light`),
+        // `executableURL` is the link itself; resolve both sides, or a
+        // PATH-invoked `upgrade` sails past this check and replaces the real
+        // binary with a link to itself.
+        return currentExecutable.resolvingSymlinksInPath().path == paths.binURL.resolvingSymlinksInPath().path
     }
 
-    /// The ad-hoc signature warning `install` and `upgrade` both end with.
+    /// The ad-hoc signature warning `upgrade` ends with.
     /// Without a stable identity every rebuild invalidates the Bluetooth
     /// grant — the flapping a one-time `signal-light sign` fixes.
     static func printSigningWarningIfNeeded(paths: SignalLightDaemonPaths, terminal: Terminal) {
@@ -66,7 +70,9 @@ enum Installation {
     /// re-reports the problem with actionable guidance if the file is still
     /// absent by then.
     private static func installHooksBinary(paths: SignalLightDaemonPaths, terminal: Terminal) {
-        let sourceDirectory = Bundle.main.executableURL?.deletingLastPathComponent()
+        // The helper sits next to the real binary; resolve the invoked path
+        // first so a symlinked invocation still finds it.
+        let sourceDirectory = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
         guard let source = HooksBinaryLocator.locate(executableDirectory: sourceDirectory) else {
             terminal.progress("    • 没有找到 agent-hooks，已跳过（灯可以正常使用；安装 Agent hooks 前，请把它和 signal-light 放在同一目录）")
             return
@@ -110,6 +116,26 @@ enum Installation {
         }
     }
 
+    /// Records which checkout this build came from, so a later `upgrade`
+    /// from the installed copy can tell whether the source has moved on.
+    /// A build with no discoverable checkout clears the record instead of
+    /// leaving a stale one to compare against.
+    static func recordBuildIdentity(paths: SignalLightDaemonPaths, terminal: Terminal) {
+        let executableDirectory = Bundle.main.executableURL?
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()
+        guard let repoRoot = executableDirectory.flatMap({ SourceStamp.repoRoot(containing: $0) }),
+              let stamp = SourceStamp.compute(repoRoot: repoRoot) else {
+            BuildRecord.remove(paths: paths)
+            return
+        }
+        do {
+            try BuildRecord(sourceRepo: repoRoot.path, sourceStamp: stamp).save(paths: paths)
+        } catch {
+            terminal.warn("记录构建来源失败：\(error)")
+        }
+    }
+
     /// Copies the currently-running executable into the CLI's own stable
     /// directory. `Bundle.main.executableURL` (not `CommandLine.arguments[0]`,
     /// which can be a relative path or a shell alias) is the reliable way to
@@ -120,21 +146,18 @@ enum Installation {
         guard let currentExecutable = Bundle.main.executableURL else {
             throw CLIError("无法定位自身的可执行文件。", exitCode: .software)
         }
+        // `copyItem` copies a symlink as a symlink; resolve the invoked path
+        // so the installed binary is the real executable, not a link into
+        // wherever this build happened to live.
+        let sourceBinary = currentExecutable.resolvingSymlinksInPath()
 
         try FileManager.default.createDirectory(at: paths.binDir, withIntermediateDirectories: true)
 
-        if isRunningInstalledCopy(paths: paths) {
-            // Re-running install from the installed copy itself: nothing is
-            // copied, so claiming a copy would be describing work that didn't
-            // happen (only the path is worth confirming).
-            terminal.progress("    • 程序已经在位 → \(displayPath(paths.binURL))")
-        } else {
-            if FileManager.default.fileExists(atPath: paths.binURL.path) {
-                try FileManager.default.removeItem(at: paths.binURL)
-            }
-            try FileManager.default.copyItem(at: currentExecutable, to: paths.binURL)
-            terminal.progress("    • 复制程序 → \(displayPath(paths.binURL))")
+        if FileManager.default.fileExists(atPath: paths.binURL.path) {
+            try FileManager.default.removeItem(at: paths.binURL)
         }
+        try FileManager.default.copyItem(at: sourceBinary, to: paths.binURL)
+        terminal.progress("    • 复制程序 → \(displayPath(paths.binURL))")
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: paths.binURL.path)
     }
 
@@ -156,7 +179,7 @@ enum Installation {
         if let attributes = try? fileManager.attributesOfItem(atPath: paths.pathSymlinkURL.path) {
             if attributes[.type] as? FileAttributeType == .typeDirectory {
                 throw CLIError(
-                    "\(displayPath(paths.pathSymlinkURL)) 是个目录，install 不会去动它；把它挪走再装。",
+                    "\(displayPath(paths.pathSymlinkURL)) 是个目录，安装不会去动它；把它挪走再装。",
                     exitCode: .noInput
                 )
             }
