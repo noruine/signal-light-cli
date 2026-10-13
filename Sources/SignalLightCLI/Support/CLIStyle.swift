@@ -7,6 +7,8 @@ public enum CLIGlyph {
     public static let success = "✅"
     public static let package = "📦"
     public static let cleanup = "🧹"
+    public static let signing = "🔏"
+    public static let upgrade = "🆙"
     public static let warning = "⚠️"
     public static let trafficLight = "🚦"
     public static let start = "▶️"

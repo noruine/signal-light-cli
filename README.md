@@ -3,28 +3,30 @@
 红绿灯（ESP32-C3）的命令行驱动：不用开 App，在终端里配对、调灯效、跑后台服务，
 让 Claude Code / Codex 的会话状态直接体现在实体灯上。macOS 14 起。
 
-- **两个可执行文件**：`signal-light`（CLI + 守护进程）、`signal-light-hooks`（Agent 钩子转发）。
+- **两个可执行文件**：`signal-light`（CLI + 守护进程）、`agent-hooks`（Agent 钩子转发）。
 - **一个库**：`SignalLightKit`（BLE、灯效模型、会话状态、钩子协议）。
 - **没有 UI，也不接管审批**：权限弹窗和提问留在 Agent 自己的终端里，灯只做提示。
 
 ## 快速开始
 
 ```bash
-make install                # 构建并安装（make help 看全部入口）
+make install                # 构建并安装到本机（重复运行即更新；make help 看全部入口）
 signal-light pair           # 扫描 → 选中你的灯（多盏时务必看清名字）
 signal-light service start  # 启动后台服务（launchd）
 signal-light hooks install  # 接入 Claude Code / Codex（勾选界面）
 signal-light                # 不带参数进交互菜单
 ```
 
-只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`；
-直接 `swift build` 需要自己加）。之后新开终端直接敲 `signal-light`。
+只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`；直接 `swift build` 需要自己加）。之后新开终端直接敲 `signal-light`。
+
+升级就是重新跑 `make install`（仓库有远端的话先 `git pull` 拿新代码）：配对、灯效配置、launchd 设置一律保留；后台服务在运行的话自动重启。已经构建过的话，也可以直接 `.build/release/signal-light upgrade`。
 
 ## 命令
 
 | 命令 | 作用 |
 | --- | --- |
-| `install` / `uninstall` | 安装到本机 / 卸载（可一并移除 Agent 钩子） |
+| `install` / `upgrade` / `uninstall` | 安装 / 升级到新构建 / 卸载（可一并移除 Agent 钩子） |
+| `sign` | 可选：配置固定签名，重建程序后蓝牙授权继续有效 |
 | `pair` / `unpair` | 配对红绿灯 / 忘掉已配对设备（会先停服务） |
 | `service start\|stop\|restart\|autostart` | 后台服务与开机自启 |
 | `hooks install\|status\|uninstall` | 接入 / 查看 / 移除 Claude Code、Codex 钩子 |
@@ -34,10 +36,34 @@ signal-light                # 不带参数进交互菜单
 | `rename` | 改灯的蓝牙广播名称 |
 | `status` / `logs` / `doctor` / `audit` | 状态、日志、体检、安装残留检查 |
 
+## 灯的表现
+
+| 灯态 | 默认灯效 | 什么时候出现 |
+| --- | --- | --- |
+| 😴 空闲 | 绿色呼吸 | 没有会话在跑 |
+| 🏃 运行中 | 黄色闪烁 | 会话开始 / 提交新提示 |
+| 🙋 等待审批 | 黄红呼吸 | Agent 请求权限 |
+| ❓ 等待回答 | 黄绿呼吸 | Agent 提问等你选 |
+
+多个会话同时在跑时：**等待你处理的 > 正在运行的 > 空闲**。灯效都能在 `signal-light` 的 🎨 灯效设置或 `config` 里改。
+
+## Agent hooks
+
+只装驱动灯态所需的最小事件集：
+
+| Agent | 装的事件 |
+| --- | --- |
+| Claude Code | `SessionStart` `UserPromptSubmit` `PermissionRequest` `Stop` `StopFailure` `SessionEnd` |
+| Codex | `SessionStart`（覆盖 startup/resume/clear/compact）`UserPromptSubmit` `PermissionRequest` `Stop` `SessionEnd` `Interrupt` |
+
+- 只动本工具写入的条目，原有 hooks（claude-island、cmux 等）不受影响；重复执行幂等。
+- **Codex 需要手动信任一次**：装完后在 Codex 里运行 `/hooks` 确认信任，钩子才会运行。
+- 审批和提问照常在 Agent 的终端里回答；hook 与弹窗并行，灯只提示、不拦截。
+
 ## 架构
 
 ```
-Agent 钩子 ──stdin JSON──▶ signal-light-hooks ──Unix socket──▶ 守护进程
+Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ 守护进程
                                                               │  SessionRegistry
                                                               ▼
                                                         灯效（BLE）
@@ -46,7 +72,7 @@ Agent 钩子 ──stdin JSON──▶ signal-light-hooks ──Unix socket─�
 - `Sources/SignalLightKit` — 产品核心：BLE 会话、灯效与设置、会话状态机、钩子协议（`Bridge/`）、Agent 安装器。
 - `Sources/SignalLightCLI` — 命令与交互菜单；`run` 子命令即守护进程本体。
 - `Sources/SignalLightHooks` — 单文件转发程序，做完就退出，不阻塞 Agent。
-- 钩子协议与状态映射：[docs/bridge.md](docs/bridge.md)；使用说明：[docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
+- 钩子协议与状态映射：[docs/bridge.md](docs/bridge.md)。
 
 ## 磁盘布局
 
@@ -60,14 +86,14 @@ Agent 钩子 ──stdin JSON──▶ signal-light-hooks ──Unix socket─�
 ## 开发
 
 ```bash
-make help                  # build / install / test / package / lint / format / clean
+make help                  # build / install / test / lint / format / clean
 scripts/test.sh            # 跑测试；只装 CommandLineTools 的机器也能跑
 scripts/check-cli-copy.sh  # 文案检查：输出不带"了"（不了/为了/除了 除外）
-zsh scripts/package-cli.sh # 出包：output/cli-package/signal-light-<版本>-macos-<架构>.zip
-zsh scripts/setup-dev-signing.sh  # 可选：固定签名，重编译后不用反复授权蓝牙
 ```
 
 CI 在每次 push 时跑构建 + 测试 + SwiftFormat/SwiftLint + 文案检查。
+
+> `swift build` 报 `Could not initialize build system … Unknown error parsing property list` 时：从 Command Line Tools 27.0（Swift 6.4）起，SwiftPM 的默认构建引擎在没装完整 Xcode 的机器上会这样失败；加 `--build-system native` 用回备用引擎即可（会打一条 deprecation 警告，忽略）。装好完整 Xcode 后 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`，`swift test` 也才能直接跑。
 
 ## 固件
 
@@ -83,7 +109,11 @@ CI 在每次 push 时跑构建 + 测试 + SwiftFormat/SwiftLint + 文案检查�
 - 附近可能有别人的红绿灯：`pair` 会列出扫到的设备，`--first` 只在唯一候选时才生效。
 - `service start` / `run` 使用真实主目录（launchd 与 Agent 钩子都按真实主目录找 socket）。
 - 只想让某个子进程不触发钩子：`SIGNAL_LIGHT_SKIP_HOOKS=1`。
+- 灯不亮时按顺序看：`signal-light status`（指出断在哪一环）、`doctor`（体检）、`logs`（服务实际做了什么）。
+- `--color` / `--verbose` / `--quiet` 这类全局参数写在子命令之后，例如 `signal-light status --color=never`。
+- 卸载只删本工具写下的东西：`~/.local/bin/signal-light` 只有仍是指向已安装二进制的链接才会被删；别的东西原样保留。
+- 给别人用：让对方克隆本仓库后运行 `make install`。
 
 ## 来历
 
-红绿灯的固件、BLE 协议与 macOS App 在 `open-vibe-island`（`wg` 分支）；本仓库是独立的命令行产品，设计上参考了那边的实现。
+红绿灯的固件、BLE 协议与 macOS App 在 `open-vibe-island`（`wg` 分支）；本仓库是独立的命令行产品，设计上参考那边的实现。

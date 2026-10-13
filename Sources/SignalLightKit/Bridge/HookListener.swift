@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-/// Hosts the Unix socket that `signal-light-hooks` posts to.
+/// Hosts the Unix socket that `agent-hooks` posts to.
 ///
 /// One connection carries one JSON `HookEvent` and gets a one-line ack. The
 /// daemon hears about bucket changes through `onBucketChange`, so there is no

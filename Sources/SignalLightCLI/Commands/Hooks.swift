@@ -132,7 +132,7 @@ enum HooksAgentSupport {
         let notes: [String]
     }
 
-    /// Finds the separately-built `signal-light-hooks` executable next to this
+    /// Finds the separately-built `agent-hooks` executable next to this
     /// process's own binary (SwiftPM builds every executable target into the
     /// same `.build/<config>/` directory, so this works for `swift run`,
     /// `swift build`, and the installed copy alike).
@@ -141,7 +141,7 @@ enum HooksAgentSupport {
             executableDirectory: Bundle.main.executableURL?.deletingLastPathComponent()
         ) else {
             throw CLIError(
-                "没有找到 signal-light-hooks。请运行 swift build --product signal-light-hooks，并把它和 signal-light 放在同一个 .build 目录。",
+                "没有找到 agent-hooks。请运行 swift build --product agent-hooks，并把它和 signal-light 放在同一个 .build 目录。",
                 exitCode: .noInput
             )
         }

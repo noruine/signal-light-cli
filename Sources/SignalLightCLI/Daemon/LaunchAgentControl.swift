@@ -120,6 +120,17 @@ public struct LaunchAgentControl {
         try runChecked(["kickstart", "-k", serviceTarget], failureContext: "重启服务失败")
     }
 
+    /// Restarts the job only when it is actually running, and reports whether
+    /// it did. Used after replacing the installed binary: a running service
+    /// keeps the previous executable in memory until it restarts, while a
+    /// service that is merely registered (or absent) must not be started by
+    /// an install.
+    public func restartIfRunning() throws -> Bool {
+        guard jobInfo().pid != nil else { return false }
+        try kickstart()
+        return true
+    }
+
     public struct JobInfo {
         public let isLoaded: Bool
         public let pid: Int?

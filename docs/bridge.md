@@ -1,6 +1,6 @@
 # 钩子协议与状态映射
 
-Agent 的钩子由 `signal-light-hooks` 转发：它从 stdin 读到 Agent 的钩子 JSON，
+Agent 的钩子由 `agent-hooks` 转发：它从 stdin 读到 Agent 的钩子 JSON，
 归一化成一条 `HookEvent`，通过 Unix socket 发给守护进程。守护进程不解析任何
 Agent 原始格式——两个 Agent 的差异只存在于转发程序里。
 

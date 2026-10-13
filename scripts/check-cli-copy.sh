@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Keeps OpenIslandCli's user-facing copy terse.
+# Keeps SignalLightCLI's user-facing copy terse.
 #
 # The product's voice drops the 了 particle from command output: state lines
 # read "已保存" / "已开启", not "存好了" / "开启好了". The ability forms
@@ -17,7 +17,7 @@ import pathlib
 import re
 import sys
 
-sources = pathlib.Path(sys.argv[1]) / "Sources" / "OpenIslandCli"
+sources = pathlib.Path(sys.argv[1]) / "Sources" / "SignalLightCLI"
 literal = re.compile(r'"((?:[^"\\]|\\.)*)"')
 allowed = re.compile(r"不了|为了|除了")
 

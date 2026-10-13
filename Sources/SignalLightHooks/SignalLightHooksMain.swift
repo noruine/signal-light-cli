@@ -1,7 +1,7 @@
 import Foundation
 import SignalLightKit
 
-/// `signal-light-hooks` — the one process an agent's hook invokes.
+/// `agent-hooks` — the one process an agent's hook invokes.
 ///
 /// It reads the agent's hook JSON from stdin, normalizes it to a `HookEvent`,
 /// and hands it to the daemon over the socket. Nothing goes to stdout and

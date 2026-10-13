@@ -6,13 +6,16 @@
 .DEFAULT_GOAL := build
 CONFIGURATION ?= release
 
-.PHONY: build install test lint format package clean help
+.PHONY: build install test lint format clean help
 
 build:  ## Build both executables ($(CONFIGURATION))
 	swift build --build-system native -c $(CONFIGURATION)
 
-install: build  ## Build, then install into ~/.signal-light
-	.build/$(CONFIGURATION)/signal-light install
+# The CLI's `upgrade` is the install-or-upgrade step: it installs when
+# nothing is there yet and words the result accordingly; `install` is the
+# repo-level verb people expect after a `git pull`.
+install: build  ## Build, then install or upgrade ~/.signal-light
+	.build/$(CONFIGURATION)/signal-light upgrade
 
 test:  ## Run the test suite
 	scripts/test.sh
@@ -28,11 +31,8 @@ format:  ## Rewrite sources with swiftformat
 	@command -v swiftformat >/dev/null || { echo "swiftformat missing: brew install swiftformat"; exit 1; }
 	swiftformat .
 
-package:  ## Produce the distributable zip
-	zsh scripts/package-cli.sh
-
-clean:  ## Remove build products and packages
-	rm -rf .build output
+clean:  ## Remove build products
+	rm -rf .build
 
 help:  ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \

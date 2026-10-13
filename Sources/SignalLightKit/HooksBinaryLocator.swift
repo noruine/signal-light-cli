@@ -100,9 +100,9 @@ public enum HooksBinaryLocator {
         let currentDirectory = currentDirectory
             ?? URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         let candidates = [
-            executableDirectory?.appendingPathComponent("signal-light-hooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("signal-light-hooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/signal-light-hooks"),
+            executableDirectory?.appendingPathComponent("agent-hooks"),
+            executableDirectory?.deletingLastPathComponent().appendingPathComponent("agent-hooks"),
+            executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/agent-hooks"),
             executableDirectory?.appendingPathComponent("VibeIslandHooks"),
             executableDirectory?.deletingLastPathComponent().appendingPathComponent("VibeIslandHooks"),
             executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/VibeIslandHooks"),
@@ -113,12 +113,12 @@ public enum HooksBinaryLocator {
             let archTriple = "x86_64-apple-macosx"
             #endif
             return [
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/release/signal-light-hooks"),
-                currentDirectory.appendingPathComponent(".build/release/signal-light-hooks"),
+                currentDirectory.appendingPathComponent(".build/\(archTriple)/release/agent-hooks"),
+                currentDirectory.appendingPathComponent(".build/release/agent-hooks"),
                 currentDirectory.appendingPathComponent(".build/\(archTriple)/release/VibeIslandHooks"),
                 currentDirectory.appendingPathComponent(".build/release/VibeIslandHooks"),
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/signal-light-hooks"),
-                currentDirectory.appendingPathComponent(".build/debug/signal-light-hooks"),
+                currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/agent-hooks"),
+                currentDirectory.appendingPathComponent(".build/debug/agent-hooks"),
                 currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/VibeIslandHooks"),
                 currentDirectory.appendingPathComponent(".build/debug/VibeIslandHooks"),
             ]

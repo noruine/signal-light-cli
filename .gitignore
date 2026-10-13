@@ -2,4 +2,3 @@
 .build/
 .swiftpm/
 Package.resolved
-output/

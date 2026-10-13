@@ -49,8 +49,8 @@ public struct SignalLightDaemonPaths: Sendable {
 
     /// The installed, user-facing binary is named `signal-light` — the actual
     /// command people type — even though the Swift build product is
-    /// `SignalLightCLI` (matching this repo's PascalCase target-naming
-    /// convention: `signal-light-hooks`, the App, …). `install` copies
+    /// `SignalLightCLI` (targets are PascalCase; commands and products
+    /// are lowercase: `signal-light`, `agent-hooks`). `install` copies
     /// the build product here under this shorter name.
     public var binURL: URL {
         binDir.appendingPathComponent("signal-light")
@@ -72,14 +72,14 @@ public struct SignalLightDaemonPaths: Sendable {
         pathSymlinkDir.appendingPathComponent("signal-light")
     }
 
-    /// This CLI's own private copy of the `signal-light-hooks` binary, used by
+    /// This CLI's own private copy of the `agent-hooks` binary, used by
     /// `hooks install <agent>` — deliberately kept under `binDir` rather than
     /// the App's shared `~/Library/Application Support/SignalLight/bin/`
     /// (`ManagedHooksBinary.defaultURL()`), since a user of this standalone
     /// CLI who never installs the App must not end up with files under a
     /// directory the App considers its own.
     public var hooksBinaryURL: URL {
-        binDir.appendingPathComponent("signal-light-hooks")
+        binDir.appendingPathComponent("agent-hooks")
     }
 
     public var deviceJSONURL: URL {

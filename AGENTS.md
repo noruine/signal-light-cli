@@ -14,8 +14,8 @@ because an agent once paired with the wrong one.
 | Task | Command |
 | --- | --- |
 | Build | `make build` |
+| Install / upgrade locally | `make install` (builds, then runs the CLI's install-or-upgrade step) |
 | Test | `make test` |
-| Package | `make package` |
 | Format / lint / copy check | `make format`, `make lint` (needs `swiftformat` and `swiftlint` from brew) |
 
 - Always build with `--build-system native`; the Makefile and scripts pass it
@@ -46,16 +46,18 @@ hardware.
 - Pair, rename, calibrate or flash only when the user asked for it. Never pass
   `--first` when more than one light may be in range; the CLI refuses to guess.
 - Do not `service stop`, `service restart` or `unpair` while testing.
+- `install`, `upgrade` and `sign` restart a running service by design; do not
+  invoke them from automated checks or unrelated testing.
 - If a process is killed mid-operation the daemon can be left stopped: restore
   it with `signal-light service start` and tell the user.
 - Hardware-free end-to-end check, with the daemon running:
 
   ```bash
   echo '{"hook_event_name":"UserPromptSubmit","session_id":"smoke","cwd":"/tmp"}' \
-    | .build/release/signal-light-hooks --source claude
+    | .build/release/agent-hooks --source claude
   .build/release/signal-light status   # bucket turns running
   echo '{"hook_event_name":"Stop","session_id":"smoke","cwd":"/tmp"}' \
-    | .build/release/signal-light-hooks --source claude
+    | .build/release/agent-hooks --source claude
   ```
 
 ## Conventions

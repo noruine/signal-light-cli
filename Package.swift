@@ -8,7 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "signal-light", targets: ["SignalLightCLI"]),
-        .executable(name: "signal-light-hooks", targets: ["SignalLightHooks"]),
+        .executable(name: "agent-hooks", targets: ["SignalLightHooks"]),
         .library(name: "SignalLightKit", targets: ["SignalLightKit"]),
     ],
     dependencies: [

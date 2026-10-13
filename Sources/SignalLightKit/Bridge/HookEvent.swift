@@ -1,7 +1,7 @@
 import Foundation
 
 /// One normalized hook fact, as it crosses the socket between
-/// `signal-light-hooks` and the daemon.
+/// `agent-hooks` and the daemon.
 ///
 /// The agents' own payload shapes stop at the hook binary: what the daemon
 /// sees is one event shape, one session id, one phase trigger — never Claude

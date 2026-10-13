@@ -50,36 +50,28 @@ struct Doctor: AsyncParsableCommand {
 
     /// Ad-hoc signatures rotate their cdhash on every rebuild, which quietly
     /// invalidates any Bluetooth permission grant TCC recorded for the
-    /// previous build — the same failure mode documented for the dev app's
-    /// Accessibility permission (see `scripts/setup-dev-signing.sh`).
+    /// previous build. `signal-light sign` sets up a local identity so
+    /// rebuilds keep the grant (see `SigningIdentity`).
     private func checkSigning(paths: SignalLightDaemonPaths, processRunner: ProcessRunning) -> DoctorCheck {
         guard FileManager.default.fileExists(atPath: paths.binURL.path) else {
             return DoctorCheck(status: .warn, title: "签名稳定性", detail: "还没装，跳过。")
         }
 
-        guard let result = try? processRunner.run(
-            URL(fileURLWithPath: "/usr/bin/codesign"),
-            arguments: ["-dv", paths.binURL.path]
-        ) else {
+        switch CodeSigning.state(of: paths.binURL, processRunner: processRunner) {
+        case .unavailable:
             return DoctorCheck(status: .warn, title: "签名稳定性", detail: "codesign 无法运行，跳过。")
-        }
-
-        let output = result.stdout + result.stderr
-        if result.exitCode != 0 {
+        case .stable:
+            return DoctorCheck(status: .ok, title: "签名稳定性", detail: "使用稳定签名身份。")
+        case .unstable:
             return DoctorCheck(
                 status: .warn,
                 title: "签名稳定性",
-                detail: "没签名；重新编译后可能要重新授权蓝牙。建议签一下：codesign --sign \"Signal Light Dev Local\" \(PathText.abbreviated(paths.binURL))"
+                detail: ContextText.choose(
+                    cli: "是临时签名：重新构建后蓝牙权限可能失效，运行 signal-light sign 配置固定签名。",
+                    menu: "是临时签名，蓝牙权限可能反复失效。"
+                )
             )
         }
-        if output.localizedCaseInsensitiveContains("adhoc") {
-            return DoctorCheck(
-                status: .warn,
-                title: "签名稳定性",
-                detail: "是临时（ad-hoc）签名，每次重新构建都换身份，蓝牙权限可能反复失效。换个固定签名吧。"
-            )
-        }
-        return DoctorCheck(status: .ok, title: "签名稳定性", detail: "使用稳定签名身份。")
     }
 
     private func checkServiceAndSocket(paths: SignalLightDaemonPaths, control: LaunchAgentControl) -> DoctorCheck {
