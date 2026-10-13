@@ -4,11 +4,9 @@ import Foundation
 /// light — without changing the installed hooks.
 public enum HookSkipConfiguration {
     public static let skipKey = "SIGNAL_LIGHT_SKIP_HOOKS"
-    /// The pre-rename key; setups that already export it keep working.
-    public static let legacySkipKey = "OPEN_ISLAND_SKIP_HOOKS"
 
     public static func shouldSkipHooks(environment: [String: String]) -> Bool {
-        isTruthy(environment[skipKey]) || isTruthy(environment[legacySkipKey])
+        isTruthy(environment[skipKey])
     }
 
     private static func isTruthy(_ value: String?) -> Bool {

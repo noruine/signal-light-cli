@@ -2,7 +2,6 @@ import Foundation
 
 public struct CodexHookInstallerManifest: Equatable, Codable, Sendable {
     public static let fileName = "signal-light-install.json"
-    public static let legacyFileName = "vibe-island-install.json"
 
     public var hookCommand: String
     public var enabledCodexHooksFeature: Bool
@@ -69,9 +68,7 @@ public enum CodexHookInstallerError: Error, LocalizedError {
 }
 
 public enum CodexHookInstaller {
-    // Keep matching the legacy status message so uninstall/status still recognize older installs.
     public static let managedStatusMessage = "Managed by signal-light"
-    public static let legacyManagedStatusMessage = "Managed by Vibe Island"
     public static let managedTimeout = 45
     public static let managedInteractiveTimeout = 60 * 60
     private static let currentFeatureKey = CodexHooksFeatureFlagKey.current.rawValue
@@ -146,8 +143,8 @@ public enum CodexHookInstaller {
         var mutated = false
 
         // Scan every event in the file, not just the ones this installer
-        // currently writes: installs from older versions (or the App) may have
-        // left managed hooks under events the minimal set no longer uses.
+        // currently writes: installs from older versions may have left
+        // managed hooks under events the minimal set no longer uses.
         for eventName in Array(hooksObject.keys) {
             let existingGroups = hooksObject[eventName] as? [Any] ?? []
             let cleanedGroups = sanitize(groups: existingGroups, managedCommand: managedCommand)
@@ -317,8 +314,8 @@ public enum CodexHookInstaller {
 
         // Any parse failure — not just a valid-JSON non-object root — is this
         // product's "your config isn't usable" case, and must surface as that
-        // typed error rather than as `JSONSerialization`'s Cocoa error (which
-        // the CLI and the App would otherwise show verbatim).
+        // typed error rather than as `JSONSerialization`'s Cocoa error, which
+        // the caller would otherwise show verbatim.
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let rootObject = object as? [String: Any] else {
             throw CodexHookInstallerError.invalidHooksJSON
@@ -367,7 +364,7 @@ public enum CodexHookInstaller {
                     return nil
                 }
 
-                return isManagedHookForInstall(hook, replacingCommand: replacingCommand) ? nil : hook
+                return isManagedHook(hook, managedCommand: replacingCommand) ? nil : hook
             }
 
             guard !filteredHooks.isEmpty else {
@@ -416,7 +413,7 @@ public enum CodexHookInstaller {
 
     private static func isManagedHook(_ hook: [String: Any], managedCommand: String?) -> Bool {
         if let statusMessage = hook["statusMessage"] as? String,
-           statusMessage == managedStatusMessage || statusMessage == legacyManagedStatusMessage {
+           statusMessage == managedStatusMessage {
             return true
         }
 
@@ -425,22 +422,6 @@ public enum CodexHookInstaller {
         }
 
         return hook["command"] as? String == managedCommand
-    }
-
-    private static func isManagedHookForInstall(_ hook: [String: Any], replacingCommand: String) -> Bool {
-        if isManagedHook(hook, managedCommand: replacingCommand) {
-            return true
-        }
-
-        guard let command = hook["command"] as? String else {
-            return false
-        }
-
-        return isLegacyHookCommand(command)
-    }
-
-    private static func isLegacyHookCommand(_ command: String) -> Bool {
-        LegacyHookCommand.matches(command)
     }
 
     private static func sectionRange(named section: String, lines: [String]) -> Range<Int>? {

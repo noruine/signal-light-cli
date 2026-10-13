@@ -4,7 +4,8 @@ import Foundation
 /// Detects whether a Unix-domain socket path currently has an active
 /// listener, via a real non-blocking connect attempt — the same technique
 /// `signal-light-bridge.py` uses. This is what lets `run` refuse to start
-/// rather than silently stealing the socket out from under the macOS App or
+/// rather than silently stealing the socket out from under another running
+/// daemon, or
 /// another bridge process: `HookListener.start` unconditionally
 /// unlinks the path before binding, so starting blind would silently hijack
 /// whatever is already listening there. It's also what tells `uninstall`

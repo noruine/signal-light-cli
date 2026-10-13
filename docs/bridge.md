@@ -54,4 +54,4 @@ Agent 原始格式——两个 Agent 的差异只存在于转发程序里。
 - 转发程序不向 stdout 写任何内容，因此不会替 Agent 做决定：审批与提问仍由
   Agent 自己的界面处理。
 - 安装只动本工具写入的条目，其它工具（claude-island、cmux 等）的钩子原样保留。
-- 单次子进程跳过钩子：设置 `SIGNAL_LIGHT_SKIP_HOOKS=1`（旧键 `OPEN_ISLAND_SKIP_HOOKS` 仍兼容）。
+- 单次子进程跳过钩子：设置 `SIGNAL_LIGHT_SKIP_HOOKS=1`。

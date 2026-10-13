@@ -3,7 +3,7 @@ import Foundation
 import SignalLightKit
 
 /// The two agents this CLI can wire hooks for. `SignalLightKit` has installers
-/// for more agents (used by the macOS App); the CLI exposes only the ones this
+/// for more agents than the CLI exposes; the CLI exposes only the ones this
 /// signal light consumes sessions from.
 enum HookAgent: String, CaseIterable, ExpressibleByArgument, Sendable {
     case claude
@@ -149,9 +149,9 @@ enum HooksAgentSupport {
     }
 
     /// Core's `invalidSettingsJSON` / `invalidHooksJSON` descriptions are
-    /// English (the App renders them in its own UI). The CLI is Chinese
-    /// throughout, so the two config-format failures a user can actually hit
-    /// are re-thrown as CLIErrors in the same voice as every other message.
+    /// English (Kit errors stay UI-neutral). The CLI is Chinese throughout,
+    /// so the two config-format failures a user can actually hit are
+    /// re-thrown as CLIErrors in the same voice as every other message.
     private static func translatingConfigErrors<T>(file: URL, _ body: () throws -> T) throws -> T {
         do {
             return try body()

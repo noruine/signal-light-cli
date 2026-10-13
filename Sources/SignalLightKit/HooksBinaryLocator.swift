@@ -1,8 +1,7 @@
 import Foundation
 
 public enum ManagedHooksBinary {
-    public static let binaryName = "signal-light-hooks"
-    public static let legacyBinaryName = "VibeIslandHooks"
+    public static let binaryName = "agent-hooks"
 
     public static func defaultURL(fileManager: FileManager = .default) -> URL {
         installDirectory(fileManager: fileManager)
@@ -11,12 +10,7 @@ public enum ManagedHooksBinary {
     }
 
     public static func candidateURLs(fileManager: FileManager = .default) -> [URL] {
-        [
-            defaultURL(fileManager: fileManager),
-            legacyInstallDirectory(fileManager: fileManager)
-                .appendingPathComponent(legacyBinaryName)
-                .standardizedFileURL,
-        ]
+        [defaultURL(fileManager: fileManager)]
     }
 
     @discardableResult
@@ -44,8 +38,8 @@ public enum ManagedHooksBinary {
         return resolvedDestinationURL
     }
 
-    /// Overwrites the installed hooks binary if the bundle source differs.
-    /// Returns `true` if the binary was updated.
+    /// Overwrites the installed hooks binary if the source differs. Returns
+    /// `true` if the binary was updated.
     @discardableResult
     public static func updateIfNeeded(
         from sourceURL: URL,
@@ -68,19 +62,11 @@ public enum ManagedHooksBinary {
         return true
     }
 
+    /// This tool's own bin directory — the same one `install` seeds with its
+    /// `agent-hooks` copy, resolved against the real home.
     private static func installDirectory(fileManager: FileManager) -> URL {
         fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library", isDirectory: true)
-            .appendingPathComponent("Application Support", isDirectory: true)
-            .appendingPathComponent("SignalLight", isDirectory: true)
-            .appendingPathComponent("bin", isDirectory: true)
-    }
-
-    private static func legacyInstallDirectory(fileManager: FileManager) -> URL {
-        fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library", isDirectory: true)
-            .appendingPathComponent("Application Support", isDirectory: true)
-            .appendingPathComponent("VibeIsland", isDirectory: true)
+            .appendingPathComponent(".signal-light", isDirectory: true)
             .appendingPathComponent("bin", isDirectory: true)
     }
 }
@@ -92,7 +78,7 @@ public enum HooksBinaryLocator {
         executableDirectory: URL? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL? {
-        if let explicitPath = environment["OPEN_ISLAND_HOOKS_BINARY"] ?? environment["VIBE_ISLAND_HOOKS_BINARY"],
+        if let explicitPath = environment["SIGNAL_LIGHT_HOOKS_BINARY"],
            fileManager.isExecutableFile(atPath: explicitPath) {
             return URL(fileURLWithPath: explicitPath).standardizedFileURL
         }
@@ -103,9 +89,6 @@ public enum HooksBinaryLocator {
             executableDirectory?.appendingPathComponent("agent-hooks"),
             executableDirectory?.deletingLastPathComponent().appendingPathComponent("agent-hooks"),
             executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/agent-hooks"),
-            executableDirectory?.appendingPathComponent("VibeIslandHooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("VibeIslandHooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/VibeIslandHooks"),
         ].compactMap { $0 } + ManagedHooksBinary.candidateURLs(fileManager: fileManager) + {
             #if arch(arm64)
             let archTriple = "arm64-apple-macosx"
@@ -115,12 +98,8 @@ public enum HooksBinaryLocator {
             return [
                 currentDirectory.appendingPathComponent(".build/\(archTriple)/release/agent-hooks"),
                 currentDirectory.appendingPathComponent(".build/release/agent-hooks"),
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/release/VibeIslandHooks"),
-                currentDirectory.appendingPathComponent(".build/release/VibeIslandHooks"),
                 currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/agent-hooks"),
                 currentDirectory.appendingPathComponent(".build/debug/agent-hooks"),
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/VibeIslandHooks"),
-                currentDirectory.appendingPathComponent(".build/debug/VibeIslandHooks"),
             ]
         }()
 

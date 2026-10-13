@@ -57,7 +57,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
     public func status(hooksBinaryURL: URL? = nil) throws -> CodexHookInstallationStatus {
         let configURL = codexDirectory.appendingPathComponent("config.toml")
         let hooksURL = codexDirectory.appendingPathComponent("hooks.json")
-        let manifestURL = resolvedManifestURL()
+        let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
         let resolvedHooksBinaryURL = resolvedHooksBinaryURL(explicitURL: hooksBinaryURL)
 
         let configContents = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
@@ -88,7 +88,6 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let configURL = codexDirectory.appendingPathComponent("config.toml")
         let hooksURL = codexDirectory.appendingPathComponent("hooks.json")
         let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
-        let legacyManifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.legacyFileName)
 
         let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
         let existingHooks = try? Data(contentsOf: hooksURL)
@@ -130,9 +129,6 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
-        if fileManager.fileExists(atPath: legacyManifestURL.path) {
-            try fileManager.removeItem(at: legacyManifestURL)
-        }
 
         return try status(hooksBinaryURL: installedHooksBinaryURL)
     }
@@ -141,9 +137,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
     public func uninstall() throws -> CodexHookInstallationStatus {
         let configURL = codexDirectory.appendingPathComponent("config.toml")
         let hooksURL = codexDirectory.appendingPathComponent("hooks.json")
-        let manifestURL = resolvedManifestURL()
-        let primaryManifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
-        let legacyManifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.legacyFileName)
+        let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
 
         let manifest = try loadManifest(at: manifestURL)
         let existingHooks = try? Data(contentsOf: hooksURL)
@@ -164,13 +158,9 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         }
 
         // Only a run that owns this install record (our manifest is present)
-        // or actually removed hooks has any business touching the shared
-        // feature flag or the old Vibe Island manifest: a no-op uninstall
-        // must leave both exactly as it found them.
-        let ownsInstallRecord = fileManager.fileExists(atPath: primaryManifestURL.path)
-        let convergedInstall = ownsInstallRecord || hooksMutation.changed
-
-        if convergedInstall, let manifest, manifest.enabledCodexHooksFeature, !hooksMutation.hasRemainingHooks {
+        // has any business touching the feature flag: a no-op uninstall must
+        // leave the config exactly as it found it.
+        if let manifest, manifest.enabledCodexHooksFeature, !hooksMutation.hasRemainingHooks {
             let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
             let featureMutation = CodexHookInstaller.disableCodexHooksFeatureIfManaged(in: existingConfig)
 
@@ -182,10 +172,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
             }
         }
 
-        try removeFileIfPresent(primaryManifestURL)
-        if convergedInstall {
-            try removeFileIfPresent(legacyManifestURL)
-        }
+        try removeFileIfPresent(manifestURL)
 
         return try status()
     }
@@ -199,16 +186,6 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(CodexHookInstallerManifest.self, from: data)
-    }
-
-    private func resolvedManifestURL() -> URL {
-        let primaryURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
-        if fileManager.fileExists(atPath: primaryURL.path) {
-            return primaryURL
-        }
-
-        let legacyURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.legacyFileName)
-        return fileManager.fileExists(atPath: legacyURL.path) ? legacyURL : primaryURL
     }
 
     private func resolvedHooksBinaryURL(explicitURL: URL?) -> URL? {

@@ -2,7 +2,6 @@ import Foundation
 
 public struct ClaudeHookInstallerManifest: Equatable, Codable, Sendable {
     public static let fileName = "signal-light-claude-hooks-install.json"
-    public static let legacyFileName = "vibe-island-claude-hooks-install.json"
 
     public var hookCommand: String
     public var installedAt: Date
@@ -123,8 +122,8 @@ public enum ClaudeHookInstaller {
         var mutated = false
 
         // Scan every event in the file, not just the ones this installer
-        // currently writes: installs from older versions (or the App) may have
-        // left managed hooks under events the minimal set no longer uses.
+        // currently writes: installs from older versions may have left
+        // managed hooks under events the minimal set no longer uses.
         for eventName in Array(hooksObject.keys) {
             let existingGroups = hooksObject[eventName] as? [Any] ?? []
             let cleanedGroups = sanitize(groups: existingGroups, managedCommand: managedCommand)
@@ -179,8 +178,8 @@ public enum ClaudeHookInstaller {
 
         // Any parse failure — not just a valid-JSON non-object root — is this
         // product's "your config isn't usable" case, and must surface as that
-        // typed error rather than as `JSONSerialization`'s Cocoa error (which
-        // the CLI and the App would otherwise show verbatim).
+        // typed error rather than as `JSONSerialization`'s Cocoa error, which
+        // the caller would otherwise show verbatim.
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let rootObject = object as? [String: Any] else {
             throw ClaudeHookInstallerError.invalidSettingsJSON
@@ -229,7 +228,7 @@ public enum ClaudeHookInstaller {
                     return nil
                 }
 
-                return isManagedHookForInstall(hook, replacingCommand: replacingCommand) ? nil : hook
+                return isManagedHook(hook, managedCommand: replacingCommand) ? nil : hook
             }
 
             guard !filteredHooks.isEmpty else {
@@ -304,31 +303,10 @@ public enum ClaudeHookInstaller {
     }
 
     private static func isManagedHook(_ hook: [String: Any], managedCommand: String?) -> Bool {
-        guard let command = hook["command"] as? String else {
+        guard let managedCommand, let command = hook["command"] as? String else {
             return false
         }
-
-        if let managedCommand, command == managedCommand {
-            return true
-        }
-
-        return isLegacyHookCommand(command)
-    }
-
-    private static func isManagedHookForInstall(_ hook: [String: Any], replacingCommand: String) -> Bool {
-        if isManagedHook(hook, managedCommand: replacingCommand) {
-            return true
-        }
-
-        guard let command = hook["command"] as? String else {
-            return false
-        }
-
-        return isLegacyHookCommand(command)
-    }
-
-    private static func isLegacyHookCommand(_ command: String) -> Bool {
-        LegacyHookCommand.matches(command)
+        return command == managedCommand
     }
 
     private static func shellQuote(_ string: String) -> String {

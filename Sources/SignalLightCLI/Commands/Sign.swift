@@ -44,8 +44,8 @@ struct Sign: AsyncParsableCommand {
 
         terminal.progress("\(terminal.emoji(CLIGlyph.signing))配置固定签名…")
 
-        let keychain = paths.home.appendingPathComponent("Library/Keychains/login.keychain-db")
-        let storeDirectory = paths.cliRootDir.appendingPathComponent("dev-signing", isDirectory: true)
+        let keychain = SigningIdentity.loginKeychain(home: paths.home)
+        let storeDirectory = paths.devSigningDir
 
         if !SigningIdentity.isAvailable(processRunner: runner) {
             let certURL = try SigningIdentity.importIdentity(

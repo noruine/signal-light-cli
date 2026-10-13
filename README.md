@@ -36,7 +36,7 @@ signal-light                # 不带参数进交互菜单
 | `calibrate` | 接线校准：逐个点亮引脚，记下红/黄/绿接在哪 |
 | `firmware check\|update` | 检查新固件 / OTA 升级（升级中按 Ctrl-C 可取消） |
 | `rename` | 改灯的蓝牙广播名称 |
-| `status` / `logs` / `doctor` / `audit` | 状态、日志、体检、安装残留检查 |
+| `status` / `logs` / `doctor` / `audit` | 状态、日志、体检、文件清单 |
 
 ## 灯的表现
 
@@ -120,4 +120,4 @@ CI 在每次 push 时跑构建 + 测试 + SwiftFormat/SwiftLint + 文案检查�
 
 ## 来历
 
-红绿灯的固件、BLE 协议与 macOS App 在 `open-vibe-island`（`wg` 分支）；本仓库是独立的命令行产品，设计上参考那边的实现。
+本仓库是完全独立的命令行产品，不和 Open Island 共用任何文件与进程，也不会动对方的东西；部分功能的设计参考借鉴了 Open Island。

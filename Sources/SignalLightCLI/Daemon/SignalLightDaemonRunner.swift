@@ -13,7 +13,7 @@ enum SignalLightDaemonRunner {
         // test/development affordance). launchd always runs with the real home;
         // a manually launched `HOME=… signal-light run` would otherwise check one
         // socket path and bind another, silently hijacking the real socket that
-        // the App or the agent hooks are using. Refuse loudly instead.
+        // the agent hooks are using. Refuse loudly instead.
         let realHome = SignalLightDaemonPaths.systemHome().standardizedFileURL
         guard paths.home.standardizedFileURL == realHome else {
             throw CLIError(
@@ -36,12 +36,11 @@ enum SignalLightDaemonRunner {
 
         // MUST happen before `HookListener.start()`: it unlinks whatever
         // socket file already exists at this path before binding, so skipping
-        // this check would let a fresh `run` silently hijack a socket the
-        // macOS App (or another bridge) is actively using.
+        // this check would let a fresh `run` silently hijack the socket a
+        // still-running daemon of this same tool is using.
         if paths.ownedSockets.contains(where: SocketProbe.isActive) {
             throw CLIError(
-                "检测到 Open Island App 或另一个桥接服务正在运行，两边不能同时驱动一盏灯。"
-                    + "先退出它；如果本工具的守护进程仍占用，请运行 signal-light service stop。",
+                "检测到 bridge socket 仍在使用中（另一个守护进程在跑）。先停掉它：signal-light service stop。",
                 exitCode: .unavailable
             )
         }

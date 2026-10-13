@@ -3,10 +3,10 @@ import Foundation
 import SignalLightKit
 
 /// Headless BLE controller for the ESP32-C3 signal light — no UI, no
-/// `@Observable`. Mirrors the app's `SignalLightCoordinator` scan/connect/
-/// reconnect logic, but on a private serial queue instead of `.main`:
-/// `AsyncParsableCommand` blocks the main thread's run loop while awaiting
-/// async work in `run`, so a `.main`-queued `CBCentralManager` would never
+/// `@Observable`. All scan/connect/reconnect work runs on a private serial
+/// queue instead of `.main`: `AsyncParsableCommand` blocks the main
+/// thread's run loop while awaiting async work in `run`, so a `.main`-queued
+/// `CBCentralManager` would never
 /// actually get to deliver its delegate callbacks. All mutable state below
 /// is confined to `queue` — either because a call came in via `queue.async`,
 /// or because CoreBluetooth itself invokes delegate methods on `queue`

@@ -4,30 +4,28 @@ import Foundation
 /// `install`/`uninstall`/`audit` all derive their file lists from this type so
 /// cleanup can never drift out of sync with what was actually written.
 ///
-/// Deliberately kept out of the App's `Application Support/SignalLight`
-/// directory: the CLI is a separate, uninstallable product and must not
-/// leave files behind in a directory shared with (or owned by) the app.
+/// Everything lives under `~/.signal-light` (plus the PATH symlink and the
+/// LaunchAgent plist): the CLI shares no directory with any other product on
+/// the machine, so uninstall can remove exactly this tree.
 ///
 /// `$HOME` is honored so install/uninstall can be exercised end-to-end
 /// against an isolated directory instead of the real home. That makes these
 /// paths a *test/development* affordance as much as a runtime location:
 /// anything launchd starts (the daemon) runs with the real home, and the
-/// shared bridge socket is keyed to the real home too (see
-/// `bridgeSocketDir` below), so a `$HOME`-overridden environment
+/// bridge socket resolves against the real home too (see
+/// `bridgeSocketURL` below), so a `$HOME`-overridden environment
 /// must not be used to drive `service`/`run` — `SignalLightDaemonRunner`
 /// refuses to start in exactly that case.
 public struct SignalLightDaemonPaths: Sendable {
     public let home: URL
-    public let uid: uid_t
 
-    public init(home: URL, uid: uid_t) {
+    public init(home: URL) {
         self.home = home
-        self.uid = uid
     }
 
-    public static func current(fileManager: FileManager = .default, uid: uid_t = getuid()) -> SignalLightDaemonPaths {
+    public static func current(fileManager: FileManager = .default) -> SignalLightDaemonPaths {
         let home = ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0, isDirectory: true) }
-        return SignalLightDaemonPaths(home: home ?? fileManager.homeDirectoryForCurrentUser, uid: uid)
+        return SignalLightDaemonPaths(home: home ?? fileManager.homeDirectoryForCurrentUser)
     }
 
     /// The real user home, ignoring `$HOME` — what launchd and the agent hook
@@ -73,11 +71,8 @@ public struct SignalLightDaemonPaths: Sendable {
     }
 
     /// This CLI's own private copy of the `agent-hooks` binary, used by
-    /// `hooks install <agent>` — deliberately kept under `binDir` rather than
-    /// the App's shared `~/Library/Application Support/SignalLight/bin/`
-    /// (`ManagedHooksBinary.defaultURL()`), since a user of this standalone
-    /// CLI who never installs the App must not end up with files under a
-    /// directory the App considers its own.
+    /// `hooks install <agent>`. Also the default install target of
+    /// `ManagedHooksBinary`, so both live under this CLI's own root.
     public var hooksBinaryURL: URL {
         binDir.appendingPathComponent("agent-hooks")
     }
@@ -109,6 +104,17 @@ public struct SignalLightDaemonPaths: Sendable {
         home.appendingPathComponent(".signal-light", isDirectory: true)
     }
 
+    /// Where `sign` keeps the local self-signed certificate (the private key
+    /// only lives in the login keychain). Owned so uninstall removes it like
+    /// everything else.
+    public var devSigningDir: URL {
+        cliRootDir.appendingPathComponent("dev-signing", isDirectory: true)
+    }
+
+    public var devSigningCertURL: URL {
+        devSigningDir.appendingPathComponent("cert.pem")
+    }
+
     public var launchAgentsDir: URL {
         home.appendingPathComponent("Library", isDirectory: true)
             .appendingPathComponent("LaunchAgents", isDirectory: true)
@@ -118,29 +124,15 @@ public struct SignalLightDaemonPaths: Sendable {
         launchAgentsDir.appendingPathComponent("\(Self.launchAgentLabel).plist")
     }
 
-    /// The daemon binds its socket here at a path it does not accept
-    /// overriding, so
-    /// this constant must track that implementation rather than being derived
-    /// from it, to keep this file free of any Dispatch/Darwin socket coupling.
+    /// The daemon's own runtime socket. Exactly two parties use it, both
+    /// from this project: `run` binds it, the `agent-hooks` binary sends to
+    /// it.
     ///
     /// `SignalLightDaemonRunner.run` refuses to start when `$HOME` isn't the
     /// real home: a daemon must never bind a socket other than the one its
     /// liveness guard inspected.
-    public var bridgeSocketDir: URL {
-        home.appendingPathComponent("Library", isDirectory: true)
-            .appendingPathComponent("Application Support", isDirectory: true)
-            .appendingPathComponent("SignalLight", isDirectory: true)
-    }
-
     public var bridgeSocketURL: URL {
-        bridgeSocketDir.appendingPathComponent("bridge.sock")
-    }
-
-    /// The path older installs and the macOS App used (host-global under
-    /// `/tmp`, keyed by uid) — probed so two daemons never fight over the
-    /// light, and cleaned up on uninstall.
-    public var legacySocketURL: URL {
-        URL(fileURLWithPath: "/tmp/open-island-\(uid).sock")
+        cliRootDir.appendingPathComponent("bridge.sock")
     }
 
     /// Every regular file the CLI is responsible for deleting on uninstall.
@@ -151,20 +143,24 @@ public struct SignalLightDaemonPaths: Sendable {
     /// gone the now-dangling symlink would stop reporting as "exists" and a
     /// naive sequential cleanup would leave it behind forever.
     public var ownedFiles: [URL] {
-        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, buildJSONURL, logURL, launchAgentPlistURL]
+        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, buildJSONURL, devSigningCertURL, logURL, launchAgentPlistURL]
     }
 
     /// Socket files this CLI writes at runtime, which must only be removed
     /// once confirmed inactive (no other process is listening on them).
     public var ownedSockets: [URL] {
-        [bridgeSocketURL, legacySocketURL]
+        [bridgeSocketURL]
     }
 
     /// Directories to `rmdir` (never `rmtree`) after their contents are gone,
-    /// innermost first, so a directory shared with other components (the App,
-    /// hook installers) is only removed when it is actually empty.
+    /// innermost first, so a directory that happened to gather other files is
+    /// only removed when it is actually empty.
     public var pruneDirsIfEmpty: [URL] {
-        [binDir, cliRootDir, userDir, bridgeSocketDir]
+        // `userDir` and `cliRootDir` are the same directory; listing it twice
+        // made audit and uninstall print the same row twice. Dedupe by
+        // standardized path, keeping the innermost-first order.
+        var seen = Set<String>()
+        return [binDir, devSigningDir, cliRootDir, userDir].filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     /// Whether cleanup may delete the entry at `url`.
@@ -342,7 +338,7 @@ public enum DaemonCleanup {
         /// means the uninstall was verifiably complete.
         public var remaining: [URL]
         /// Socket files deliberately left in place because a live process is
-        /// still listening on them (the macOS App, another bridge). They are
+        /// still listening on them (another bridge or program). They are
         /// somebody else's to own while that process runs, so they must never
         /// make a cleanup look incomplete — see `Uninstall` and `Audit`.
         public var liveSockets: [URL]
@@ -350,7 +346,7 @@ public enum DaemonCleanup {
         /// directory where one of our files should be, or a
         /// `~/.local/bin/signal-light` pointing somewhere else. Never deleted,
         /// never counted as residue — but the caller must say they were left
-        /// alone, or "已清除" would be a claim about somebody else's file.
+        /// alone, or "不存在" would be a claim about somebody else's file.
         public var keptForeignEntries: [URL]
 
         public init(
@@ -419,7 +415,13 @@ public enum DaemonCleanup {
         }
 
         let auditReport = audit(paths: paths, fileManager: fileManager, socketIsInactive: socketIsInactive)
-        report.remaining.append(contentsOf: auditReport.remaining.filter { !report.remaining.contains($0) })
+        // A socket this run already probed live is never residue, whatever a
+        // second probe says: a wedged listener whose accept backlog reads full
+        // can refuse the retry, and `remaining` drives uninstall's hard
+        // failure — failing over the one entry cleanup was right to keep.
+        report.remaining.append(contentsOf: auditReport.remaining.filter {
+            !report.remaining.contains($0) && !report.liveSockets.contains($0)
+        })
         report.liveSockets.append(contentsOf: auditReport.liveSockets.filter { !report.liveSockets.contains($0) })
         report.keptForeignEntries.append(contentsOf: auditReport.keptForeignEntries.filter { !report.keptForeignEntries.contains($0) })
 
@@ -453,11 +455,10 @@ public enum DaemonCleanup {
             }
         }
         // A prune directory is only *our* residue if we could have removed it
-        // but didn't (empty, or junk-only). One still holding other
-        // components' files — the App's `Application Support/SignalLight`,
-        // another tool under `~/.signal-light` — is legitimately theirs to
-        // keep, and flagging it would make a perfectly clean uninstall
-        // report false residue.
+        // but didn't (empty, or junk-only). One still holding other files — a
+        // user's own file dropped under `~/.signal-light`, say — is
+        // legitimately theirs to keep, and flagging it would make a perfectly
+        // clean uninstall report false residue.
         for dir in paths.pruneDirsIfEmpty where fileManager.fileExists(atPath: dir.path) {
             let contents = (try? fileManager.contentsOfDirectory(atPath: dir.path)) ?? []
             if contents.allSatisfy(isIgnorableDirectoryEntry) {

@@ -38,6 +38,21 @@ struct Uninstall: AsyncParsableCommand {
             terminal.progress("    • 停止 launchd 服务")
         }
 
+        // The fixed-signing identity lives outside the home directory (login
+        // keychain), so the file cleanup below can't reach it; take it out
+        // first while its certificate file still exists on disk.
+        let identityRemoval = SigningIdentity.removeIdentity(
+            storeDirectory: paths.devSigningDir,
+            keychain: SigningIdentity.loginKeychain(home: paths.home)
+        )
+        let identityParts = [
+            identityRemoval.identityRemoved ? "证书与私钥" : nil,
+            identityRemoval.trustRemoved ? "信任设置" : nil,
+        ].compactMap { $0 }
+        if !identityParts.isEmpty {
+            terminal.progress("    • 移除固定签名身份（登录钥匙串里的\(identityParts.joined(separator: "、"))）")
+        }
+
         if alsoRemoveHooks {
             removeHooksFromAgents(terminal: terminal, paths: paths)
         }
@@ -55,12 +70,12 @@ struct Uninstall: AsyncParsableCommand {
             paths.binURL, paths.hooksBinaryURL, paths.deviceJSONURL,
             paths.stateJSONURL, paths.settingsJSONURL, paths.buildJSONURL, paths.logURL,
         ]
-        if removedDirs.contains(PathText.abbreviated(paths.cliRootDir))
+        if removedDirs.contains(paths.cliRootDir.path)
             || removedDirs.contains(paths.binDir.path)
             || cliFiles.contains(where: { removedPaths.contains($0.path) }) {
-            terminal.progress("    • 移除 \(PathText.abbreviated(paths.cliRootDir))（程序、配置、日志、hooks 二进制副本）")
+            terminal.progress("    • 移除 \(PathText.abbreviated(paths.cliRootDir))（程序、配置、日志、签名文件、hooks 二进制副本）")
         }
-        if removedPaths.contains(PathText.abbreviated(paths.pathSymlinkURL)) {
+        if removedPaths.contains(paths.pathSymlinkURL.path) {
             terminal.progress("    • 移除 \(PathText.abbreviated(paths.pathSymlinkURL))（PATH 快捷命令；\(PathText.abbreviated(paths.pathSymlinkDir)) 本身不动）")
         }
         if removedPaths.contains(paths.launchAgentPlistURL.path) {
@@ -69,7 +84,7 @@ struct Uninstall: AsyncParsableCommand {
         if paths.ownedSockets.contains(where: { removedPaths.contains($0.path) }) {
             terminal.progress("    • 清理运行时 socket")
         }
-        // A socket with a live listener (the macOS App, another bridge) is
+        // A socket with a live listener (another bridge or program) is
         // deliberately left alone — that's somebody else's to own while it
         // runs, and it must not make this uninstall look unfinished.
         for socket in report.liveSockets {
@@ -96,8 +111,9 @@ struct Uninstall: AsyncParsableCommand {
         // created (so cleanup rightly refused to touch them) — say so
         // instead of letting "彻底卸载" quietly overstate what happened.
         // Entries already reported individually above don't need the summary.
-        let keptInsideCliRoot = report.keptForeignEntries.contains { $0.path.hasPrefix(PathText.abbreviated(paths.cliRootDir)) }
-        if !keptInsideCliRoot, FileManager.default.fileExists(atPath: PathText.abbreviated(paths.cliRootDir)) {
+        let keptInsideCliRoot = report.keptForeignEntries.contains { $0.path.hasPrefix(paths.cliRootDir.path) }
+            || report.liveSockets.contains { $0.path.hasPrefix(paths.cliRootDir.path) }
+        if !keptInsideCliRoot, FileManager.default.fileExists(atPath: paths.cliRootDir.path) {
             terminal.warn("\(PathText.abbreviated(paths.cliRootDir)) 里还有不是本工具建的文件，已保留。")
         }
         if !alsoRemoveHooks, !CLIRuntimeContext.isMenuSession {

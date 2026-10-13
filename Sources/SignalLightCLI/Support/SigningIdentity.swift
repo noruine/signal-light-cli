@@ -15,6 +15,14 @@ enum SigningIdentity {
     private static let openssl = URL(fileURLWithPath: "/usr/bin/openssl")
     private static let codesign = URL(fileURLWithPath: "/usr/bin/codesign")
 
+    /// Where a user-level identity lives; the one place `sign` imports into
+    /// and `uninstall` deletes from.
+    static func loginKeychain(home: URL) -> URL {
+        home.appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Keychains", isDirectory: true)
+            .appendingPathComponent("login.keychain-db")
+    }
+
     /// Whether `codesign --sign "<name>"` would find a usable identity.
     /// `find-identity -v` lists only valid (trusted) ones on purpose.
     static func isAvailable(processRunner: ProcessRunning = SystemProcessRunner()) -> Bool {
@@ -37,6 +45,12 @@ enum SigningIdentity {
         keychain: URL,
         processRunner: ProcessRunning = SystemProcessRunner()
     ) throws -> URL {
+        guard FileManager.default.fileExists(atPath: keychain.path) else {
+            throw CLIError(
+                "找不到登录钥匙串：\(PathText.abbreviated(keychain))。签名身份要导入那里，请确认钥匙串存在后重试。",
+                exitCode: .noInput
+            )
+        }
         try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
         let certURL = storeDirectory.appendingPathComponent("cert.pem")
 
@@ -46,6 +60,10 @@ enum SigningIdentity {
         defer { try? FileManager.default.removeItem(at: workDirectory) }
         let keyURL = workDirectory.appendingPathComponent("key.pem")
         let p12URL = workDirectory.appendingPathComponent("identity.p12")
+        // A throwaway password for the temporary .p12. Empty does not work:
+        // `security import -P ""` dies with "MAC verification failed during
+        // PKCS12 import (wrong password?)", naming the wrong cause.
+        let password = UUID().uuidString
 
         try runChecked(
             openssl,
@@ -63,19 +81,38 @@ enum SigningIdentity {
             openssl,
             arguments: [
                 "pkcs12", "-export", "-inkey", keyURL.path, "-in", certURL.path,
-                "-out", p12URL.path, "-passout", "pass:",
+                "-out", p12URL.path, "-passout", "pass:\(password)",
             ],
             failureContext: "打包签名身份失败",
             processRunner: processRunner
         )
-        // `-A` plus `-T codesign` lets codesign use the key without asking
-        // for authorization on every signature.
+        // Read the package back before `security` ever sees it, so a bad
+        // export fails as what it is instead of surfacing as an import error.
         try runChecked(
-            security,
-            arguments: ["import", p12URL.path, "-k", keychain.path, "-P", "", "-T", codesign.path, "-A"],
-            failureContext: "导入签名身份失败",
+            openssl,
+            arguments: ["pkcs12", "-info", "-noout", "-in", p12URL.path, "-passin", "pass:\(password)"],
+            failureContext: "校验打包好的签名身份失败",
             processRunner: processRunner
         )
+        // `-A` plus `-T codesign` lets codesign use the key without asking
+        // for authorization on every signature.
+        let imported = try processRunner.run(
+            security,
+            arguments: ["import", p12URL.path, "-k", keychain.path, "-P", password, "-T", codesign.path, "-A"]
+        )
+        guard imported.exitCode == 0 else {
+            // Leave nothing half-done: without the keychain entry the
+            // certificate is scrap, and the next attempt regenerates both.
+            try? FileManager.default.removeItem(at: certURL)
+            if let leftovers = try? FileManager.default.contentsOfDirectory(atPath: storeDirectory.path), leftovers.isEmpty {
+                try? FileManager.default.removeItem(at: storeDirectory)
+            }
+            let detail = (imported.stderr + imported.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw CLIError(
+                "导入签名身份失败\(detail.isEmpty ? "" : "：\(detail)")。这次没有留下任何文件，可直接重试。",
+                exitCode: .software
+            )
+        }
         return certURL
     }
 
@@ -93,6 +130,29 @@ enum SigningIdentity {
             arguments: ["add-trusted-cert", "-r", "trustRoot", "-p", "codeSign", "-k", keychain.path, certURL.path]
         )
         return result.exitCode == 0
+    }
+
+    /// Best-effort removal of the identity for `uninstall`'s "as if it was
+    /// never here" promise: trust settings first (that step needs the
+    /// certificate file), then the keychain entry — which takes the private
+    /// key with it. Returns what was actually removed, so the caller reports
+    /// only real removals and a machine that never ran `sign` stays silent.
+    static func removeIdentity(
+        storeDirectory: URL,
+        keychain: URL,
+        processRunner: ProcessRunning = SystemProcessRunner()
+    ) -> (trustRemoved: Bool, identityRemoved: Bool) {
+        let certURL = storeDirectory.appendingPathComponent("cert.pem")
+        var trustRemoved = false
+        if FileManager.default.fileExists(atPath: certURL.path),
+           let result = try? processRunner.run(security, arguments: ["remove-trusted-cert", certURL.path]) {
+            trustRemoved = result.exitCode == 0
+        }
+        var identityRemoved = false
+        if let result = try? processRunner.run(security, arguments: ["delete-identity", "-c", name, keychain.path]) {
+            identityRemoved = result.exitCode == 0
+        }
+        return (trustRemoved, identityRemoved)
     }
 
     /// The command that finishes the trust step by hand, for when the

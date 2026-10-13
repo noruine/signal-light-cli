@@ -118,7 +118,7 @@ struct Doctor: AsyncParsableCommand {
         return DoctorCheck(
             status: .fail,
             title: "后台服务",
-            detail: "服务未运行，但 socket 被其他进程占用（可能是 App 或另一个桥接程序）；两边不能同时驱动一盏灯。"
+            detail: "服务未运行，但 socket 被其他进程占用（可能是另一个桥接程序）；两边不能同时驱动一盏灯。"
         )
     }
 

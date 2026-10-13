@@ -30,7 +30,7 @@ struct GlobalOptions: ParsableArguments {
 struct SignalLightCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "signal-light",
-        abstract: "红绿灯后台服务：不用开 macOS App 的原生 CLI。",
+        abstract: "红绿灯后台服务：在终端里控制信号灯。",
         discussion: """
         直接运行不带任何参数的 signal-light 会进入交互菜单，跟着选就行。
         第一次装到本机：在仓库里运行 make install（更新同样用它）。

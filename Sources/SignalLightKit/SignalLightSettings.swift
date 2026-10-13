@@ -24,7 +24,7 @@ public struct SignalLightSettings: Codable, Sendable, Equatable {
     }
 
     /// The out-of-box configuration: every bucket on its default effect,
-    /// full brightness, enabled. Matches the app's first-run behavior.
+    /// full brightness, enabled.
     public static var `default`: SignalLightSettings {
         SignalLightSettings(
             effects: Dictionary(uniqueKeysWithValues: SignalLightBucket.allCases.map { ($0, .defaultEffect(for: $0)) }),
@@ -49,7 +49,7 @@ public struct SignalLightSettings: Codable, Sendable, Equatable {
 
 public enum SignalLightSettingsStore {
     /// Loads settings from `url`, or returns `.default` when the file is
-    /// missing — a fresh install behaves exactly like the app's first run.
+    /// missing — a fresh install starts from these defaults.
     public static func load(from url: URL, fileManager: FileManager = .default) throws -> SignalLightSettings {
         guard fileManager.fileExists(atPath: url.path) else {
             return .default

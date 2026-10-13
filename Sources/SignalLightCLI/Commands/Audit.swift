@@ -4,10 +4,10 @@ import SignalLightKit
 
 struct Audit: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "只读检查：列出各项文件/服务当前是否存在（排查安装残留）。",
+        abstract: "只读检查：列出各项文件/服务当前是否存在（卸载后确认无残留）。",
         discussion: """
-        默认列出所有本工具管辖的文件、目录与 launchd 服务，并标注「存在 / 已清除 / 保留」。
-        脚本可用 --expect-clean：发现任何残留即以非零退出码结束。
+        默认列出所有本工具管辖的文件、目录与 launchd 服务：● 表示存在，○ 表示不存在。
+        装机状态下两者都属正常；卸载后用 --expect-clean 确认没有残留——发现任何残留即以非零退出码结束。
         """
     )
 
@@ -41,44 +41,47 @@ struct Audit: AsyncParsableCommand {
         let liveSocketPaths = Set(report.liveSockets.map(\.path))
         let keptForeignPaths = Set(report.keptForeignEntries.map(\.path))
 
+        // One legend line, then dots only: the per-row verdict words were
+        // the part that read like something had gone wrong. ● is the status
+        // header's own dot, minus its good/bad colors — in an inventory every
+        // state is normal.
+        terminal.out(terminal.dimmed("● 存在，○ 不存在；装机状态下都属正常，卸载后用 --expect-clean 查残留。"))
+        terminal.out("")
+
         for path in paths.ownedFiles + paths.ownedSockets {
-            // A socket with a live listener is not this CLI's residue — it is
-            // in use by the App or another bridge, and cleanup correctly left
-            // it alone. Same third state as the shared directories below.
-            if liveSocketPaths.contains(PathText.abbreviated(path)) {
-                terminal.out("\(terminal.dimmed("保留"))  \(PathText.abbreviated(path))（正在被别的程序使用）")
+            // A socket with a live listener is not this CLI's residue — some
+            // other program is using it, and cleanup correctly left it alone.
+            if liveSocketPaths.contains(path.path) {
+                terminal.out("● \(PathText.abbreviated(path))（正在被别的程序使用）")
                 continue
             }
             // An inventory path somebody else occupies (a directory where one
             // of our files should be, a repointed PATH link): still there, but
-            // not ours to remove — "已清除" would be a claim about a foreign
-            // file we never touched.
-            if keptForeignPaths.contains(PathText.abbreviated(path)) {
-                terminal.out("\(terminal.dimmed("保留"))  \(PathText.abbreviated(path))（不是本工具建的）")
+            // not ours to remove.
+            if keptForeignPaths.contains(path.path) {
+                terminal.out("● \(PathText.abbreviated(path))（不是本工具建的）")
                 continue
             }
-            let exists = remainingPaths.contains(PathText.abbreviated(path))
-            terminal.out("\(exists ? terminal.failure("存在") : terminal.success("已清除"))  \(PathText.abbreviated(path))")
+            let exists = remainingPaths.contains(path.path)
+            terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(path))")
         }
 
-        // Directories have a third state files don't: still on disk but only
-        // because other components (the App, hook installers) keep files
-        // there — that's not this CLI's residue, and calling it "已清除"
-        // would be a lie while calling it "存在" would be a false alarm.
+        // Directories read like everything else — on disk or not; whether a
+        // survivor is removable junk is an uninstall-time question for
+        // `--expect-clean`.
         for dir in paths.pruneDirsIfEmpty {
-            let label: String
-            if remainingPaths.contains(PathText.abbreviated(dir)) {
-                label = terminal.failure("存在")
-            } else if FileManager.default.fileExists(atPath: PathText.abbreviated(dir)) {
-                label = terminal.dimmed("保留")  // 内含其他组件的文件，非本工具残留
-            } else {
-                label = terminal.success("已清除")
-            }
-            terminal.out("\(label)  \(PathText.abbreviated(dir))")
+            let exists = FileManager.default.fileExists(atPath: dir.path)
+            terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(dir))")
         }
 
         let jobLabel = "launchd job (\(SignalLightDaemonPaths.launchAgentLabel))"
-        terminal.out("\(jobInfo.isLoaded ? terminal.failure("存在") : terminal.success("已清除"))  \(jobLabel)")
+        terminal.out("\(dot(jobInfo.isLoaded, terminal: terminal)) \(jobLabel)")
+    }
+
+    /// ● for present, dim ○ for absent — the status dot without its colors:
+    /// in a plain inventory there is no good or bad state to paint.
+    private func dot(_ exists: Bool, terminal: Terminal) -> String {
+        exists ? "●" : terminal.dimmed("○")
     }
 
     private func printJSON(report: DaemonCleanup.Report, jobInfo: LaunchAgentControl.JobInfo, isClean: Bool) throws {

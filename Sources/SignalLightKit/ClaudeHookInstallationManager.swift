@@ -59,7 +59,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
 
     public func status(hooksBinaryURL: URL? = nil) throws -> ClaudeHookInstallationStatus {
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
-        let manifestURL = resolvedManifestURL()
+        let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let resolvedHooksBinaryURL = resolvedHooksBinaryURL(explicitURL: hooksBinaryURL)
 
         let settingsData = try? Data(contentsOf: settingsURL)
@@ -87,7 +87,6 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
 
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
-        let legacyManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.legacyFileName)
         let existingSettings = try? Data(contentsOf: settingsURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
@@ -118,9 +117,6 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
-        if fileManager.fileExists(atPath: legacyManifestURL.path) {
-            try fileManager.removeItem(at: legacyManifestURL)
-        }
 
         return try status(hooksBinaryURL: installedHooksBinaryURL)
     }
@@ -128,9 +124,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
     @discardableResult
     public func uninstall() throws -> ClaudeHookInstallationStatus {
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
-        let manifestURL = resolvedManifestURL()
-        let primaryManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
-        let legacyManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.legacyFileName)
+        let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let manifest = try loadManifest(at: manifestURL)
         let existingSettings = try? Data(contentsOf: settingsURL)
         let mutation = try ClaudeHookInstaller.uninstallSettingsJSON(
@@ -150,15 +144,8 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         }
 
         // This product's own install record always goes with the install it
-        // describes. The legacy manifest belonged to the old Vibe Island
-        // install instead, so the same rule as the config file applies to it:
-        // only a run that actually owns or converged this install has any
-        // business deleting another product's file.
-        let ownsInstallRecord = fileManager.fileExists(atPath: primaryManifestURL.path)
-        try removeFileIfPresent(primaryManifestURL)
-        if ownsInstallRecord || mutation.changed {
-            try removeFileIfPresent(legacyManifestURL)
-        }
+        // describes.
+        try removeFileIfPresent(manifestURL)
 
         return try status()
     }
@@ -172,16 +159,6 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(ClaudeHookInstallerManifest.self, from: data)
-    }
-
-    private func resolvedManifestURL() -> URL {
-        let primaryURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
-        if fileManager.fileExists(atPath: primaryURL.path) {
-            return primaryURL
-        }
-
-        let legacyURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.legacyFileName)
-        return fileManager.fileExists(atPath: legacyURL.path) ? legacyURL : primaryURL
     }
 
     private func resolvedHooksBinaryURL(explicitURL: URL?) -> URL? {

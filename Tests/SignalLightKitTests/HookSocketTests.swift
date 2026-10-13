@@ -7,19 +7,20 @@ import Testing
 struct HookSocketTests {
     @Test("An event reaches the registry over the socket and is acknowledged")
     func roundTrip() async throws {
-        let socketURL = makeSocketURL()
-        let registry = SessionRegistry()
-        let listener = HookListener(socketURL: socketURL, registry: registry) { _ in }
-        try await listener.start()
-        defer { Task { await listener.stop() } }
+        try await withSocketPath { socketURL in
+            let registry = SessionRegistry()
+            let listener = HookListener(socketURL: socketURL, registry: registry) { _ in }
+            try await listener.start()
+            defer { Task { await listener.stop() } }
 
-        let sent = HookSocketClient.send(
-            HookEvent(source: .claude, kind: .userPromptSubmit, sessionID: "s1"),
-            to: socketURL
-        )
+            let sent = HookSocketClient.send(
+                HookEvent(source: .claude, kind: .userPromptSubmit, sessionID: "s1"),
+                to: socketURL
+            )
 
-        #expect(sent)
-        #expect(await registry.bucket() == .running)
+            #expect(sent)
+            #expect(await registry.bucket() == .running)
+        }
     }
 
     @Test("A missing daemon is a silent, bounded failure")
@@ -35,20 +36,27 @@ struct HookSocketTests {
 
     @Test("Garbage on the socket never reaches the registry")
     func garbageIsIgnored() async throws {
-        let socketURL = makeSocketURL()
-        let registry = SessionRegistry()
-        let listener = HookListener(socketURL: socketURL, registry: registry) { _ in }
-        try await listener.start()
-        defer { Task { await listener.stop() } }
+        try await withSocketPath { socketURL in
+            let registry = SessionRegistry()
+            let listener = HookListener(socketURL: socketURL, registry: registry) { _ in }
+            try await listener.start()
+            defer { Task { await listener.stop() } }
 
-        try sendRaw(Data("not json".utf8), to: socketURL)
-        #expect(await registry.bucket() == .idle)
+            try sendRaw(Data("not json".utf8), to: socketURL)
+            #expect(await registry.bucket() == .idle)
+        }
     }
 
-    /// `sun_path` tops out at 104 bytes and the system temp directory alone
-    /// eats half of that, so tests need a deliberately short base.
-    private func makeSocketURL() -> URL {
-        URL(filePath: "/tmp/sl-test-\(UUID().uuidString.prefix(8))").appending(path: "b.sock")
+    /// Runs `body` with a throwaway socket path under a short `/tmp`
+    /// directory and removes the directory afterwards — cases used to leave
+    /// one behind per run, piling up in /tmp across runs. The base stays
+    /// deliberately short: `sun_path` tops out at 104 bytes and the system
+    /// temp directory alone eats half of that.
+    private func withSocketPath<T>(_ body: (URL) async throws -> T) async throws -> T {
+        let directory = URL(filePath: "/tmp/sl-test-\(UUID().uuidString.prefix(8))")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        return try await body(directory.appending(path: "b.sock"))
     }
 
     private func sendRaw(_ payload: Data, to socketURL: URL) throws {
