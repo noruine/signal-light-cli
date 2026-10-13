@@ -10,8 +10,8 @@ enum DiagnosticsMenu {
     static func run(terminal: Terminal) async {
         await MenuLoop.run(
             terminal: terminal,
+            page: "诊断",
             header: {
-                terminal.out("\(terminal.emoji(CLIGlyph.doctor))诊断")
                 if FileManager.default.fileExists(atPath: SignalLightDaemonPaths.current().binURL.path) {
                     terminal.out(terminal.dimmed("版本 \(AppVersion.current())"))
                 }
@@ -19,19 +19,19 @@ enum DiagnosticsMenu {
             },
             buildItems: {
                 [
-                    MenuChoice("\(terminal.emoji(CLIGlyph.doctor))体检") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.doctor))体检", crumb: "体检") {
                         await MenuCommandRunner.run(["doctor"], terminal: terminal)
                     },
-                    MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))查看当前状态") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))查看当前状态", crumb: "查看当前状态") {
                         await MenuCommandRunner.run(["status"], terminal: terminal)
                     },
-                    MenuChoice("\(terminal.emoji(CLIGlyph.logs))查看最近日志") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.logs))查看最近日志", crumb: "查看最近日志") {
                         await MenuCommandRunner.run(["logs"], terminal: terminal)
                     },
-                    MenuChoice("\(terminal.emoji(CLIGlyph.search))查看文件清单") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.search))查看文件清单", crumb: "查看文件清单") {
                         await MenuCommandRunner.run(["audit"], terminal: terminal)
                     },
-                    MenuChoice("\(terminal.emoji(CLIGlyph.signing))配置固定签名") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.signing))配置固定签名", crumb: "配置固定签名") {
                         await MenuCommandRunner.run(["sign"], terminal: terminal)
                     },
                 ]

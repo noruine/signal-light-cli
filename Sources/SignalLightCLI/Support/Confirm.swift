@@ -57,7 +57,7 @@ public enum Confirm {
     private static func draw(_ terminal: Terminal, question: String, yes: Bool) {
         let yesLabel = optionLabel(terminal, "是", selected: yes)
         let noLabel = optionLabel(terminal, "否", selected: !yes)
-        let hint = terminal.dimmed("↑/↓ 选择 · 回车确认 · Esc 取消")
+        let hint = terminal.dimmed(terminal.keyBar([.move, .enter("确认"), .escape("取消")]))
         writeStderr("\r\u{1B}[K\(question)  \(yesLabel)  \(noLabel)   \(hint)")
     }
 

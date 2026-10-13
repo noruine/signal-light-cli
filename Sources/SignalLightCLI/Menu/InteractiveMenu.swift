@@ -16,9 +16,8 @@ enum InteractiveMenu {
 
         await MenuLoop.run(
             terminal: terminal,
-            footerHint: "↑/↓ 移动 · 回车确认 · Esc 退出",
+            escapeHint: .escape("退出"),
             header: {
-                terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))信号灯")
                 let snapshot = StatusSnapshot.current(paths: paths)
                 snapshot.printMenuHeader(terminal: terminal)
                 if let hint = nextStepHint(paths: paths, snapshot: snapshot) {
@@ -62,44 +61,45 @@ enum InteractiveMenu {
         // service started, pushing every row below it down a slot and
         // renumbering the list under the user's cursor.
         if !state.toolInstalled {
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.package))安装到本机") {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.package))安装到本机", crumb: "安装到本机") {
                 await MenuCommandRunner.run(["upgrade"], terminal: terminal)
             })
         } else if snapshot.jobInfo.isLoaded || state.serviceRegistered {
             // Registered (or running) means there is something to control, even
             // if the device file went missing — the page must stay reachable.
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))服务", pausesAfter: false) {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))服务", crumb: "服务", pausesAfter: false) {
                 await ServiceMenu.run(terminal: terminal)
             })
         } else if !state.paired {
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.device))配对设备") {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.device))配对设备", crumb: "配对设备") {
                 await MenuCommandRunner.run(["pair"], terminal: terminal)
             })
         } else {
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.start))启动服务") {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.start))启动服务", crumb: "启动服务") {
                 await MenuCommandRunner.run(["service", "start"], terminal: terminal)
             })
         }
 
-        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.effect))灯效设置", pausesAfter: false) {
+        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.effect))灯效设置", crumb: "灯效设置", pausesAfter: false) {
             await ConfigMenu.run(terminal: terminal)
         })
-        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.agent))接入 Agent", pausesAfter: false) {
+        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.agent))接入 Agent", crumb: "接入 Agent", pausesAfter: false) {
             await HooksMenu.run(terminal: terminal)
         })
-        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.device))设备管理", pausesAfter: false) {
+        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.device))设备管理", crumb: "设备管理", pausesAfter: false) {
             await DeviceMenu.run(terminal: terminal)
         })
-        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.doctor))诊断", pausesAfter: false) {
+        items.append(MenuChoice("\(terminal.emoji(CLIGlyph.doctor))诊断", crumb: "诊断", pausesAfter: false) {
             await DiagnosticsMenu.run(terminal: terminal)
         })
 
         if state.toolInstalled {
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.upgrade))升级") {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.upgrade))升级", crumb: "升级") {
                 await MenuCommandRunner.run(["upgrade"], terminal: terminal)
             })
             items.append(MenuChoice(
                 "\(terminal.emoji(CLIGlyph.cleanup))卸载",
+                crumb: "卸载",
                 shouldExitAfter: { !FileManager.default.fileExists(atPath: paths.binURL.path) }
             ) {
                 await MenuCommandRunner.run(["uninstall"], terminal: terminal)

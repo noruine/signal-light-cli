@@ -13,7 +13,7 @@ enum MultiSelect {
         items: [String],
         preselected: Set<Int> = [],
         terminal: Terminal,
-        footerHint: String = "↑/↓ 移动 · 空格勾选 · 回车确认 · Esc 返回",
+        footerHint: String,
         header: () -> Void
     ) -> Set<Int>? {
         guard !items.isEmpty else { return [] }

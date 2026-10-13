@@ -20,6 +20,9 @@ struct Sign: AsyncParsableCommand {
 
     @OptionGroup var globals: GlobalOptions
 
+    @Flag(name: [.customShort("y"), .long], help: "跳过确认提示（非交互环境下必须传入）。")
+    var yes: Bool = false
+
     func run() async throws {
         let terminal = globals.makeTerminal()
         let paths = SignalLightDaemonPaths.current()
@@ -39,6 +42,11 @@ struct Sign: AsyncParsableCommand {
         }
         guard !unstableBinaries.isEmpty else {
             terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("程序已使用稳定签名，无需处理。"))")
+            return
+        }
+
+        guard try confirmKeychainWrite(terminal: terminal) else {
+            CancelNotice.say("已取消。", terminal: terminal)
             return
         }
 
@@ -85,5 +93,19 @@ struct Sign: AsyncParsableCommand {
         } catch {
             terminal.warn("后台服务重启失败：\(error)。可运行 signal-light service restart 重试。")
         }
+    }
+
+    /// The one line of consent for writing a certificate and its private key
+    /// into the login keychain: an interactive yes, or an explicit --yes.
+    private func confirmKeychainWrite(terminal: Terminal) throws -> Bool {
+        guard !yes else { return true }
+        guard terminal.isInteractive else {
+            throw CLIError(
+                "会往登录钥匙串写入自签名证书与私钥；非交互环境必须加 --yes。",
+                exitCode: .usage
+            )
+        }
+        terminal.out("会往登录钥匙串写入自签名证书与私钥，并重新签名已安装的程序；服务在运行时重启一次，期间 macOS 弹一次授权。")
+        return Confirm.promptYesNo(terminal, "继续？")
     }
 }

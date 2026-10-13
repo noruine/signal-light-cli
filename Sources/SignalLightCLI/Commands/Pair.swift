@@ -204,7 +204,7 @@ enum PairFlow {
         let outcome = MenuSelector.choose(
             items: labels,
             terminal: terminal,
-            footerHint: "↑/↓ 移动 · 回车确认 · Esc 取消",
+            footerHint: terminal.keyBar([.move, .enter("确认"), .escape("取消")]),
             header: {
                 terminal.out("\(terminal.emoji(CLIGlyph.search))找到 \(discovered.count) 个设备，选择要配对的：")
                 terminal.out("")

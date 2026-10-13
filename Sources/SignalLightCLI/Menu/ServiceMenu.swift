@@ -12,9 +12,9 @@ enum ServiceMenu {
 
         await MenuLoop.run(
             terminal: terminal,
+            page: "服务",
             header: {
                 let snapshot = StatusSnapshot.current(paths: paths)
-                terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))服务")
                 terminal.out(terminal.dimmed("状态：\(snapshot.menuServiceDescription)"))
                 terminal.out("")
             },
@@ -23,17 +23,17 @@ enum ServiceMenu {
                 var items: [MenuChoice] = []
 
                 if snapshot.serviceIsRunning {
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.stop))停止服务") {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.stop))停止服务", crumb: "停止服务") {
                         await MenuCommandRunner.run(["service", "stop"], terminal: terminal)
                     })
                 } else {
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.start))启动服务") {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.start))启动服务", crumb: "启动服务") {
                         await MenuCommandRunner.run(["service", "start"], terminal: terminal)
                     })
                 }
 
                 if snapshot.jobInfo.isLoaded {
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.restart))重启服务") {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.restart))重启服务", crumb: "重启服务") {
                         await MenuCommandRunner.run(["service", "restart"], terminal: terminal)
                     })
                 }
@@ -44,7 +44,7 @@ enum ServiceMenu {
                     // it here would read as the action's outcome instead of
                     // what selecting it does.
                     let autostartOn = snapshot.runAtLoad == true
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.autostart))\(autostartOn ? "关闭" : "开启")开机自启") {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.autostart))\(autostartOn ? "关闭" : "开启")开机自启", crumb: "\(autostartOn ? "关闭" : "开启")开机自启") {
                         await MenuCommandRunner.run(
                             ["service", "autostart", autostartOn ? "disable" : "enable"],
                             terminal: terminal

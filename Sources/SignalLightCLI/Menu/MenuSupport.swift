@@ -91,18 +91,20 @@ enum MenuPrompt {
         }
     }
 
-    /// Blocks until the user presses Enter, so command output stays on screen
-    /// long enough to read before the menu redraws over it. EOF just returns.
+    /// Blocks until the user presses Enter (or Esc, or Ctrl-C/Ctrl-D), so
+    /// command output stays on screen long enough to read before the menu
+    /// redraws over it. EOF just returns. The default message is the
+    /// canonical single-key bar `回车 继续`.
     ///
     /// Reads in cbreak mode rather than via cooked `readLine`: at a cooked
     /// prompt an impatient arrow-key press echoes its raw escape bytes (`^[[B`)
-    /// onto the line. With echo off nothing stray is printed, and only Enter
-    /// (or Ctrl-C/Ctrl-D, treated the same as "continue") unblocks — every
-    /// other key is silently swallowed, which is the behavior the user
-    /// expects once a menu has "captured" the keyboard. Falls back to a line
-    /// read when stdin isn't a TTY.
-    static func pause(_ terminal: Terminal, message: String = "按回车继续") {
-        FileHandle.standardError.write(Data(terminal.dimmed(message).utf8))
+    /// onto the line. With echo off nothing stray is printed, and only Enter,
+    /// Esc, or Ctrl-C/Ctrl-D unblocks — every other key is silently
+    /// swallowed, which is the behavior the user expects once a menu has
+    /// "captured" the keyboard. Falls back to a line read when stdin isn't a
+    /// TTY.
+    static func pause(_ terminal: Terminal, message: String? = nil) {
+        FileHandle.standardError.write(Data(terminal.dimmed(message ?? terminal.keyBar([.enter("继续")])).utf8))
 
         guard let original = RawMode.enter() else {
             _ = Swift.readLine()
@@ -119,6 +121,10 @@ enum MenuPrompt {
             switch byte {
             case 0x0A, 0x0D, 0x03, 0x04:  // Enter, Ctrl-C, Ctrl-D
                 return
+            case 0x1B:  // Esc — the site-wide "back", answered here too
+                if case .lone = RawMode.classifyEscape() {
+                    return
+                }
             default:
                 continue  // discard arrow keys and any other keypress
             }
@@ -132,6 +138,9 @@ enum MenuPrompt {
 /// user isn't asked to press Enter twice.
 struct MenuChoice {
     let label: String
+    /// The plain name this item carries into breadcrumbs — no glyph, no
+    /// decoration — so a result screen reads `🚦  信号灯 › 诊断 › 查看文件清单`.
+    let crumb: String
     let pausesAfter: Bool
     let run: () async -> Void
     /// Evaluated after `run` completes: return true to leave the menu loop
@@ -143,32 +152,45 @@ struct MenuChoice {
 
     init(
         _ label: String,
+        crumb: String,
         pausesAfter: Bool = true,
         shouldExitAfter: @escaping () -> Bool = { false },
         run: @escaping () async -> Void
     ) {
         self.label = label
+        self.crumb = crumb
         self.pausesAfter = pausesAfter
         self.shouldExitAfter = shouldExitAfter
         self.run = run
     }
 }
 
-/// The shared render→pick→run→pause loop behind every interactive menu. Keeps
-/// the arrow-key picker, the "→ 你选了什么" echo, and the post-action pause in
-/// one place so the main menu and each sub-menu behave identically.
+/// The shared render→pick→run→pause loop behind every interactive menu.
+/// Draws the one fixed frame every screen shares — breadcrumb on top, key bar
+/// on the bottom, each composed in `Terminal` — and runs the same pick →
+/// action → pause behavior, so pages differ only in their body. The
+/// breadcrumb follows an action onto its result screen, one segment deeper.
 /// `buildItems` is re-evaluated every iteration so item labels/availability
 /// reflect state changes from the previous action.
 enum MenuLoop {
     static func run(
         terminal: Terminal,
-        footerHint: String = "↑/↓ 移动 · 回车确认 · Esc 返回",
+        page: String? = nil,
+        escapeHint: KeyHint = .escape("返回"),
         header: @escaping () -> Void,
         buildItems: () -> [MenuChoice]
     ) async {
         while true {
             let items = buildItems()
-            let outcome = MenuSelector.choose(items: items.map(\.label), terminal: terminal, footerHint: footerHint, header: header)
+            let outcome = MenuSelector.choose(
+                items: items.map(\.label),
+                terminal: terminal,
+                footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint]),
+                header: {
+                    terminal.out(terminal.menuBreadcrumb(page))
+                    header()
+                }
+            )
             guard case let .selected(index) = outcome else { return }
 
             let item = items[index]
@@ -178,6 +200,11 @@ enum MenuLoop {
             // in a session that keeps going.
             print("\u{1B}[2J\u{1B}[H", terminator: "")
             fflush(stdout)
+            // The frame follows the action onto its result screen: same
+            // breadcrumb, one segment deeper, so output never floats without
+            // a place.
+            terminal.out(terminal.menuBreadcrumb(page, item.crumb))
+            terminal.out("")
             await item.run()
 
             // Exit before pausing so the final output (e.g. uninstall's

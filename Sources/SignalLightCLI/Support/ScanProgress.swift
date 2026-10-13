@@ -99,7 +99,7 @@ final class ScanProgress: @unchecked Sendable {
             message = "\(spin)  蓝牙未开启，去控制中心或系统设置里打开，打开后自动继续（Esc 取消）"
         case let .scanning(deadline):
             let remaining = max(0, Int(deadline.timeIntervalSinceNow.rounded(.up)))
-            message = "\(spin)  正在扫描红绿灯设备…剩余 \(remaining)s（找到即停，Esc 取消）"
+            message = "\(spin)  正在扫描红绿灯设备…剩余 \(remaining)s（找到即停 · Esc 取消）"
         case .finalizing:
             message = "\(spin)  已找到红绿灯，正在确认…"
         case .none:

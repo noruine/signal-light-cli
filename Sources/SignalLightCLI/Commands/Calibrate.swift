@@ -120,7 +120,7 @@ struct Calibrate: AsyncParsableCommand {
     /// just add noise. Enter / Space / n mean "nothing lit"; Esc (or Ctrl-C)
     /// cancels the whole calibration and records nothing.
     private func promptObservation() -> SignalLightWizardObservation? {
-        FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮，Esc 取消：".utf8))
+        FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮（Esc 取消）：".utf8))
 
         guard let original = RawMode.enter() else {
             let line = readLine(strippingNewline: true)?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""

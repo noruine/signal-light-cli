@@ -321,8 +321,9 @@ enum HooksAgentSetup {
             items: labels,
             preselected: preselected,
             terminal: terminal,
+            footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")]),
             header: {
-                terminal.out("\(terminal.emoji(CLIGlyph.agent))Agent 接入")
+                terminal.out(terminal.menuBreadcrumb("接入 Agent"))
                 terminal.out(terminal.dimmed("勾上想让信号灯跟随的 Agent，回车生效。"))
                 terminal.out("")
             }

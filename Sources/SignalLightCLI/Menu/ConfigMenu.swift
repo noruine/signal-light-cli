@@ -11,8 +11,8 @@ enum ConfigMenu {
 
         await MenuLoop.run(
             terminal: terminal,
+            page: "灯效设置",
             header: {
-                terminal.out("\(terminal.emoji(CLIGlyph.effect))灯效设置")
                 terminal.out(terminal.dimmed("选择状态并调整灯效，改动可直接在灯上预览。"))
                 terminal.out("")
             },
@@ -23,17 +23,17 @@ enum ConfigMenu {
                     // The edit flow pauses only when something actually
                     // happened — cancelling out of a picker returns to the
                     // list instantly instead of asking for a pointless Enter.
-                    return MenuChoice(label, pausesAfter: false) {
+                    return MenuChoice(label, crumb: SignalLightBucketDisplay.name(bucket), pausesAfter: false) {
                         await editBucket(bucket, paths: paths, terminal: terminal)
                     }
                 }
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.brightness))全局亮度  当前 \(settings.clampedBrightness)%", pausesAfter: false) {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.brightness))全局亮度  当前 \(settings.clampedBrightness)%", crumb: "全局亮度", pausesAfter: false) {
                     await editBrightness(current: settings.clampedBrightness, terminal: terminal)
                 })
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.power))\(settings.enabled ? "关闭信号灯" : "打开信号灯")") {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.power))\(settings.enabled ? "关闭信号灯" : "打开信号灯")", crumb: settings.enabled ? "关闭信号灯" : "打开信号灯") {
                     await MenuCommandRunner.run(["config", settings.enabled ? "off" : "on"], terminal: terminal)
                 })
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.reset))恢复默认灯效") {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.reset))恢复默认灯效", crumb: "恢复默认灯效") {
                     await confirmReset(terminal: terminal)
                 })
                 return items
@@ -81,7 +81,7 @@ enum ConfigMenu {
         let outcome = MenuSelector.choose(
             items: labels,
             terminal: terminal,
-            footerHint: "↑/↓ 移动 · 回车确认 · Esc 取消",
+            footerHint: terminal.keyBar([.move, .enter("确认"), .escape("取消")]),
             initialIndex: startIndex,
             header: {
                 terminal.out("\(bucketTitle)：第 1 步，怎么亮")
@@ -107,6 +107,7 @@ enum ConfigMenu {
                 items: labels,
                 preselected: preselected,
                 terminal: terminal,
+                footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")]),
                 header: {
                     terminal.out("\(bucketTitle)：第 2 步，哪些颜色")
                     terminal.out("")
@@ -115,7 +116,7 @@ enum ConfigMenu {
             guard let chosen else { return nil }
             if chosen.isEmpty {
                 terminal.warn("至少要选一个颜色。")
-                MenuPrompt.pause(terminal, message: "按回车重选")
+                MenuPrompt.pause(terminal, message: "回车 重选")
                 continue
             }
             return palette.enumerated().compactMap { chosen.contains($0.offset) ? $0.element : nil }
@@ -144,7 +145,7 @@ enum ConfigMenu {
 
                 try await session.sendCommand(SignalLightCommandEncoder.encode(effect))
                 terminal.out("已发到灯上。")
-                MenuPrompt.pause(terminal, message: "按回车结束预览")
+                MenuPrompt.pause(terminal, message: "回车 结束预览")
                 try? await session.sendCommand(SignalLightControlCommand.off)
             }
         } catch let cliError as CLIError {

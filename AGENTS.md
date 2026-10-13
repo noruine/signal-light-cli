@@ -70,6 +70,12 @@ hardware.
   results: 已X for a finished action, X完成 for a finished flow, X失败 for a
   failed one, 无法X for an environment limit, 已取消X for a cancel. A cancel
   says one line and returns; only output worth reading asks for a keypress.
+- Nothing touches the machine silently: an action that writes files, the
+  keychain, or launchd is either a command the user typed or one they
+  confirmed first, with the consequences said out loud.
+- Every interactive screen shares the same chrome — its breadcrumb and key
+  bar come from `Terminal.menuBreadcrumb` / `Terminal.keyBar`; only the
+  body changes, and a page lists just the key hints it answers to.
 - `VERSION` at the repo root is the human version; every commit that
   touches shipped code (`Sources/`, `Makefile`, `Package.swift`) bumps it
   in the same commit — `feat` moves the minor digit, anything else the

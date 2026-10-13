@@ -10,35 +10,35 @@ enum DeviceMenu {
 
         await MenuLoop.run(
             terminal: terminal,
+            page: "设备管理",
             header: {
                 let deviceName = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL))?.name
-                terminal.out("\(terminal.emoji(CLIGlyph.device))设备管理")
                 terminal.out(terminal.dimmed(deviceName.map { "当前：\($0)" } ?? "还没配对过设备"))
                 terminal.out("")
             },
             buildItems: {
                 let paired = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL)) != nil
                 var items: [MenuChoice] = [
-                    MenuChoice("\(terminal.emoji(CLIGlyph.search))重新扫描并配对") {
+                    MenuChoice("\(terminal.emoji(CLIGlyph.search))重新扫描并配对", crumb: "重新扫描并配对") {
                         await MenuCommandRunner.run(["pair"], terminal: terminal)
                     },
                 ]
 
                 if paired {
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.rename))重命名蓝牙名称", pausesAfter: false) {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.rename))重命名蓝牙名称", crumb: "重命名蓝牙名称", pausesAfter: false) {
                         await renameDevice(paths: paths, terminal: terminal)
                     })
                 }
 
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.calibrate))接线校准") {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.calibrate))接线校准", crumb: "接线校准") {
                     await MenuCommandRunner.run(["calibrate"], terminal: terminal)
                 })
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.firmware))固件更新（检查并升级）") {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.firmware))固件更新（检查并升级）", crumb: "固件更新（检查并升级）") {
                     await MenuCommandRunner.run(["firmware", "update"], terminal: terminal)
                 })
 
                 if paired {
-                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.unpair))忘掉已配对设备") {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.unpair))忘掉已配对设备", crumb: "忘掉已配对设备") {
                         await MenuCommandRunner.run(["unpair"], terminal: terminal)
                     })
                 }
