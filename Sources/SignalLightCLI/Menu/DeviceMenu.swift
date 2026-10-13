@@ -17,13 +17,14 @@ enum DeviceMenu {
                 terminal.out("")
             },
             buildItems: {
+                let paired = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL)) != nil
                 var items: [MenuChoice] = [
                     MenuChoice("\(terminal.emoji(CLIGlyph.search))重新扫描并配对") {
                         await MenuCommandRunner.run(["pair"], terminal: terminal)
                     },
                 ]
 
-                if (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL)) != nil {
+                if paired {
                     items.append(MenuChoice("\(terminal.emoji(CLIGlyph.rename))重命名蓝牙名称", pausesAfter: false) {
                         await renameDevice(paths: paths, terminal: terminal)
                     })
@@ -35,6 +36,12 @@ enum DeviceMenu {
                 items.append(MenuChoice("\(terminal.emoji(CLIGlyph.firmware))固件更新（检查并升级）") {
                     await MenuCommandRunner.run(["firmware", "update"], terminal: terminal)
                 })
+
+                if paired {
+                    items.append(MenuChoice("\(terminal.emoji(CLIGlyph.unpair))忘掉已配对设备") {
+                        await MenuCommandRunner.run(["unpair"], terminal: terminal)
+                    })
+                }
 
                 return items
             }

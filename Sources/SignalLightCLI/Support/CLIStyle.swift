@@ -23,6 +23,7 @@ public enum CLIGlyph {
     public static let logs = "📜"
     public static let next = "👉"
     public static let rename = "✏️"
+    public static let unpair = "🗑️"
     public static let autostart = "⏰"
     public static let power = "🔌"
     public static let brightness = "💡"

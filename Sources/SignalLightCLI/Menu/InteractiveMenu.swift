@@ -62,7 +62,7 @@ enum InteractiveMenu {
         // service started, pushing every row below it down a slot and
         // renumbering the list under the user's cursor.
         if !state.toolInstalled {
-            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.package))安装 signal-light 到本机") {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.package))安装到本机") {
                 await MenuCommandRunner.run(["upgrade"], terminal: terminal)
             })
         } else if snapshot.jobInfo.isLoaded || state.serviceRegistered {
@@ -95,8 +95,11 @@ enum InteractiveMenu {
         })
 
         if state.toolInstalled {
+            items.append(MenuChoice("\(terminal.emoji(CLIGlyph.upgrade))升级") {
+                await MenuCommandRunner.run(["upgrade"], terminal: terminal)
+            })
             items.append(MenuChoice(
-                "\(terminal.emoji(CLIGlyph.cleanup))卸载 signal-light",
+                "\(terminal.emoji(CLIGlyph.cleanup))卸载",
                 shouldExitAfter: { !FileManager.default.fileExists(atPath: paths.binURL.path) }
             ) {
                 await MenuCommandRunner.run(["uninstall"], terminal: terminal)
