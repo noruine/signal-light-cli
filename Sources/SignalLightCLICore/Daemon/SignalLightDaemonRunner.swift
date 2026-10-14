@@ -129,9 +129,9 @@ enum SignalLightDaemonRunner {
 /// drive the light through one place. Thread-safe: the two callers run on
 /// unrelated queues.
 final class LightController: @unchecked Sendable {
-    private let bleDaemon: SignalLightBLEDaemon
     private let settingsURL: URL
     private let log: RestrainedLog
+    private let sendDesiredState: @Sendable (Int, SignalLightEffect?) -> Void
     private let lock = NSLock()
     private var settings: SignalLightSettings = .default
     // Starts at `.idle` rather than `nil`: "no hook event has arrived yet"
@@ -140,16 +140,29 @@ final class LightController: @unchecked Sendable {
     private var currentBucket: SignalLightBucket? = .idle
 
     init(bleDaemon: SignalLightBLEDaemon, settingsURL: URL, log: RestrainedLog) {
-        self.bleDaemon = bleDaemon
         self.settingsURL = settingsURL
         self.log = log
+        sendDesiredState = { brightness, effect in
+            bleDaemon.updateDesiredBrightness(brightness)
+            bleDaemon.updateDesiredEffect(effect)
+        }
+    }
+
+    init(
+        settingsURL: URL,
+        log: RestrainedLog,
+        sendDesiredState: @escaping @Sendable (Int, SignalLightEffect?) -> Void
+    ) {
+        self.settingsURL = settingsURL
+        self.log = log
+        self.sendDesiredState = sendDesiredState
     }
 
     func applyBucket(_ bucket: SignalLightBucket) {
         lock.lock()
+        defer { lock.unlock() }
         currentBucket = bucket
         let (brightness, effect) = resolveLocked()
-        lock.unlock()
         push(brightness: brightness, effect: effect)
     }
 
@@ -165,9 +178,9 @@ final class LightController: @unchecked Sendable {
             return
         }
         lock.lock()
+        defer { lock.unlock() }
         settings = loaded
         let (brightness, effect) = resolveLocked()
-        lock.unlock()
         push(brightness: brightness, effect: effect)
     }
 
@@ -181,8 +194,7 @@ final class LightController: @unchecked Sendable {
     }
 
     private func push(brightness: Int, effect: SignalLightEffect?) {
-        bleDaemon.updateDesiredBrightness(brightness)
-        bleDaemon.updateDesiredEffect(effect)
+        sendDesiredState(brightness, effect)
     }
 }
 
@@ -213,8 +225,9 @@ private actor ShutdownCoordinator {
 /// single `state.json` snapshot `status` reads. The two arrive from
 /// independent asynchronous sources (the BLE queue, and the bridge observer
 /// loop) that must not race each other writing the same file.
-private final class DaemonStateWriter: @unchecked Sendable {
+final class DaemonStateWriter: @unchecked Sendable {
     private let paths: SignalLightDaemonPaths
+    private let saveState: @Sendable (SignalLightDaemonState) -> Void
     private let lock = NSLock()
     /// Stamped into every snapshot so readers can tell a live daemon's state
     /// apart from the last snapshot a now-dead process left behind (the daemon
@@ -225,28 +238,33 @@ private final class DaemonStateWriter: @unchecked Sendable {
     private var currentBucket: String?
     private var sessions: [SessionRegistry.SessionStatus]?
 
-    init(paths: SignalLightDaemonPaths) {
+    init(
+        paths: SignalLightDaemonPaths,
+        saveState: (@Sendable (SignalLightDaemonState) -> Void)? = nil
+    ) {
         self.paths = paths
+        self.saveState = saveState ?? { state in
+            try? SignalLightDaemonStateStore.save(state, to: paths.stateJSONURL)
+        }
     }
 
     func updateBLE(_ state: SignalLightDaemonState.BLE, deviceName: String?) {
         lock.lock()
+        defer { lock.unlock() }
         ble = state
         self.deviceName = deviceName
-        lock.unlock()
-        persist()
+        persistLocked()
     }
 
     func updateSessionSummary(_ summary: SessionRegistry.Summary) {
         lock.lock()
+        defer { lock.unlock() }
         currentBucket = summary.bucket.rawValue
         sessions = summary.sessions
-        lock.unlock()
-        persist()
+        persistLocked()
     }
 
-    private func persist() {
-        lock.lock()
+    private func persistLocked() {
         let snapshot = SignalLightDaemonState(
             ble: ble,
             deviceName: deviceName,
@@ -255,7 +273,6 @@ private final class DaemonStateWriter: @unchecked Sendable {
             updatedAt: Date(),
             pid: pid
         )
-        lock.unlock()
-        try? SignalLightDaemonStateStore.save(snapshot, to: paths.stateJSONURL)
+        saveState(snapshot)
     }
 }
