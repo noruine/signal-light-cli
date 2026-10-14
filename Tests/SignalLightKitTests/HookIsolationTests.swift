@@ -61,7 +61,7 @@ struct HookIsolationTests {
             hookCommand: managedCommand
         )
         let removed = try ClaudeHookInstaller.uninstallSettingsJSON(
-            existingData: try #require(installed.contents),
+            existingData: installed.contents,
             managedCommand: managedCommand
         )
         let commands = try hookCommands(in: try #require(removed.contents))
@@ -84,6 +84,106 @@ struct HookIsolationTests {
         #expect(!removed.managedHooksPresent)
     }
 
+    @Test("Claude hook edits preserve malformed foreign entries")
+    func claudeEditsPreserveMalformedForeignEntries() throws {
+        let foreignEntries: [Any] = [
+            "opaque entry",
+            ["foreign": true],
+            ["hooks": [42, ["type": "command", "command": foreignCommand]]],
+        ]
+        let existing = try JSONSerialization.data(withJSONObject: [
+            "hooks": ["Stop": foreignEntries, "Unknown": "untouched foreign value"],
+        ])
+        let installed = try ClaudeHookInstaller.installSettingsJSON(existingData: existing, hookCommand: managedCommand)
+        let installedData = try #require(installed.contents)
+        let installedObject = try JSONSerialization.jsonObject(with: installedData)
+        let installedRoot = try #require(installedObject as? [String: Any])
+        let installedHooks = try #require(installedRoot["hooks"] as? [String: Any])
+        #expect(installedHooks["Unknown"] as? String == "untouched foreign value")
+        let groups = try #require(installedHooks["Stop"] as? [Any])
+        #expect(groups.count == foreignEntries.count + 1)
+        #expect(groups[0] as? String == "opaque entry")
+        #expect((groups[1] as? [String: Bool])?["foreign"] == true)
+        let malformedHooks = (groups[2] as? [String: Any])?["hooks"] as? [Any]
+        #expect(malformedHooks?.count == 2)
+        #expect(malformedHooks?.first as? Int == 42)
+
+        let removed = try ClaudeHookInstaller.uninstallSettingsJSON(
+            existingData: installed.contents,
+            managedCommand: managedCommand
+        )
+        let removedData = try #require(removed.contents)
+        let removedObject = try JSONSerialization.jsonObject(with: removedData)
+        let removedRoot = try #require(removedObject as? [String: Any])
+        let removedHooks = try #require(removedRoot["hooks"] as? [String: Any])
+        #expect(removedHooks["Unknown"] as? String == "untouched foreign value")
+        let remaining = try #require(removedHooks["Stop"] as? [Any])
+        #expect(remaining.count == 3)
+        #expect(remaining[0] as? String == "opaque entry")
+        #expect((remaining[1] as? [String: Bool])?["foreign"] == true)
+        let remainingHooks = (remaining[2] as? [String: Any])?["hooks"] as? [Any]
+        #expect(remainingHooks?.count == 2)
+        #expect(remainingHooks?.first as? Int == 42)
+        #expect((remainingHooks?.last as? [String: String])?["command"] == foreignCommand)
+    }
+
+    @Test("Codex hook edits preserve malformed foreign entries")
+    func codexEditsPreserveMalformedForeignEntries() throws {
+        let codexCommand = CodexHookInstaller.hookCommand(for: "/Users/tester/.signal-light/bin/agent-hooks")
+        let foreignEntries: [Any] = [
+            "opaque entry",
+            ["foreign": true],
+            ["hooks": [42, ["type": "command", "command": foreignCommand]]],
+        ]
+        let existing = try JSONSerialization.data(withJSONObject: [
+            "hooks": ["Stop": foreignEntries, "Unknown": "untouched foreign value"],
+        ])
+        let installed = try CodexHookInstaller.installHooksJSON(existingData: existing, hookCommand: codexCommand)
+        let installedData = try #require(installed.contents)
+        let installedObject = try JSONSerialization.jsonObject(with: installedData)
+        let installedRoot = try #require(installedObject as? [String: Any])
+        let installedHooks = try #require(installedRoot["hooks"] as? [String: Any])
+        #expect(installedHooks["Unknown"] as? String == "untouched foreign value")
+        let groups = try #require(installedHooks["Stop"] as? [Any])
+        #expect(groups.count == foreignEntries.count + 1)
+        #expect(groups[0] as? String == "opaque entry")
+        #expect((groups[1] as? [String: Bool])?["foreign"] == true)
+        let malformedHooks = (groups[2] as? [String: Any])?["hooks"] as? [Any]
+        #expect(malformedHooks?.count == 2)
+        #expect(malformedHooks?.first as? Int == 42)
+
+        let removed = try CodexHookInstaller.uninstallHooksJSON(
+            existingData: installed.contents,
+            managedCommand: codexCommand
+        )
+        let removedData = try #require(removed.contents)
+        let removedObject = try JSONSerialization.jsonObject(with: removedData)
+        let removedRoot = try #require(removedObject as? [String: Any])
+        let removedHooks = try #require(removedRoot["hooks"] as? [String: Any])
+        #expect(removedHooks["Unknown"] as? String == "untouched foreign value")
+        let remaining = try #require(removedHooks["Stop"] as? [Any])
+        #expect(remaining.count == 3)
+        #expect(remaining[0] as? String == "opaque entry")
+        #expect((remaining[1] as? [String: Bool])?["foreign"] == true)
+        let remainingHooks = (remaining[2] as? [String: Any])?["hooks"] as? [Any]
+        #expect(remainingHooks?.count == 2)
+        #expect(remainingHooks?.first as? Int == 42)
+        #expect((remainingHooks?.last as? [String: String])?["command"] == foreignCommand)
+    }
+
+    @Test("Install refuses to replace a non-object hooks configuration")
+    func installRejectsMalformedHooksRoot() throws {
+        let claude = try JSONSerialization.data(withJSONObject: ["hooks": "foreign value"])
+        let codex = claude
+
+        #expect(throws: ClaudeHookInstallerError.self) {
+            try ClaudeHookInstaller.installSettingsJSON(existingData: claude, hookCommand: managedCommand)
+        }
+        #expect(throws: CodexHookInstallerError.self) {
+            try CodexHookInstaller.installHooksJSON(existingData: codex, hookCommand: managedCommand)
+        }
+    }
+
     @Test("Codex install and uninstall touch only this tool's entries")
     func codexRoundTripKeepsForeign() throws {
         let installed = try CodexHookInstaller.installHooksJSON(
@@ -95,7 +195,7 @@ struct HookIsolationTests {
         #expect(commands.contains(managedCommand))
 
         let removed = try CodexHookInstaller.uninstallHooksJSON(
-            existingData: try #require(installed.contents),
+            existingData: installed.contents,
             managedCommand: managedCommand
         )
         commands = try hookCommands(in: try #require(removed.contents))

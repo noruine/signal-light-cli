@@ -58,11 +58,14 @@ public enum CodexHooksFeatureFlagKey: String, Equatable, Sendable {
 
 public enum CodexHookInstallerError: Error, LocalizedError {
     case invalidHooksJSON
+    case invalidHookStructure
 
     public var errorDescription: String? {
         switch self {
         case .invalidHooksJSON:
             "The existing Codex hooks file is not valid JSON."
+        case .invalidHookStructure:
+            "The existing Codex hooks structure cannot be safely updated."
         }
     }
 }
@@ -107,11 +110,17 @@ public enum CodexHookInstaller {
         hookCommand: String
     ) throws -> CodexHookFileMutation {
         var rootObject = try loadRootObject(from: existingData)
+        if let hooks = rootObject["hooks"], !(hooks is [String: Any]) {
+            throw CodexHookInstallerError.invalidHookStructure
+        }
         let existingHooksObject = rootObject["hooks"] as? [String: Any] ?? [:]
         var hooksObject: [String: Any] = [:]
 
         for (eventName, value) in existingHooksObject {
-            let existingGroups = value as? [Any] ?? []
+            guard let existingGroups = value as? [Any] else {
+                hooksObject[eventName] = value
+                continue
+            }
             let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
 
             if !cleanedGroups.isEmpty {
@@ -120,6 +129,9 @@ public enum CodexHookInstaller {
         }
 
         for spec in eventSpecs {
+            if let existingGroups = existingHooksObject[spec.name], !(existingGroups is [Any]) {
+                throw CodexHookInstallerError.invalidHookStructure
+            }
             let existingGroups = hooksObject[spec.name] as? [Any] ?? []
             let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
             hooksObject[spec.name] = cleanedGroups + [
@@ -142,21 +154,23 @@ public enum CodexHookInstaller {
         }
 
         var rootObject = try loadRootObject(from: existingData)
-        var hooksObject = rootObject["hooks"] as? [String: Any] ?? [:]
+        guard let rawHooks = rootObject["hooks"] else {
+            return CodexHookFileMutation(contents: existingData, changed: false, hasRemainingHooks: true)
+        }
+        guard var hooksObject = rawHooks as? [String: Any] else {
+            return CodexHookFileMutation(contents: existingData, changed: false, hasRemainingHooks: true)
+        }
         var mutated = false
 
         // Scan every event in the file, not just the ones this installer
         // currently writes: installs from older versions may have left
         // managed hooks under events the minimal set no longer uses.
         for eventName in Array(hooksObject.keys) {
-            let existingGroups = hooksObject[eventName] as? [Any] ?? []
+            guard let existingGroups = hooksObject[eventName] as? [Any] else { continue }
             let cleanedGroups = sanitize(groups: existingGroups, managedCommand: managedCommand)
 
-            // Only a hook that is actually ours counts as a change: `sanitize`
-            // also drops malformed or empty foreign entries, and a file whose
-            // hooks all belong to somebody else must come back byte-for-byte
-            // untouched (a no-op uninstall may never reformat or claim to have
-            // removed anything).
+            // Only a matching command counts as a change. A file whose hooks
+            // all belong to somebody else must stay byte-for-byte untouched.
             if containsManagedHook(in: existingGroups, managedCommand: managedCommand) {
                 mutated = true
             }
@@ -331,49 +345,37 @@ public enum CodexHookInstaller {
         try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
 
-    private static func sanitize(groups: [Any], managedCommand: String?) -> [[String: Any]] {
-        groups.compactMap { item in
-            guard var group = item as? [String: Any] else {
-                return nil
+    private static func sanitize(groups: [Any], managedCommand: String?) -> [Any] {
+        groups.compactMap { item -> Any? in
+            guard var group = item as? [String: Any],
+                  let existingHooks = group["hooks"] as? [Any] else {
+                return item
             }
 
-            let existingHooks = group["hooks"] as? [Any] ?? []
-            let filteredHooks = existingHooks.compactMap { hook -> [String: Any]? in
-                guard let hook = hook as? [String: Any] else {
-                    return nil
-                }
-
-                return isManagedHook(hook, managedCommand: managedCommand) ? nil : hook
+            let filteredHooks = existingHooks.filter { hook in
+                guard let hook = hook as? [String: Any] else { return true }
+                return !isManagedHook(hook, managedCommand: managedCommand)
             }
-
-            guard !filteredHooks.isEmpty else {
-                return nil
-            }
-
+            guard filteredHooks.count != existingHooks.count else { return item }
+            guard !filteredHooks.isEmpty else { return nil }
             group["hooks"] = filteredHooks
             return group
         }
     }
 
-    private static func sanitizeForInstall(groups: [Any], replacingCommand: String) -> [[String: Any]] {
-        groups.compactMap { item in
-            guard var group = item as? [String: Any] else {
-                return nil
+    private static func sanitizeForInstall(groups: [Any], replacingCommand: String) -> [Any] {
+        groups.compactMap { item -> Any? in
+            guard var group = item as? [String: Any],
+                  let existingHooks = group["hooks"] as? [Any] else {
+                return item
             }
 
-            let existingHooks = group["hooks"] as? [Any] ?? []
-            let filteredHooks = existingHooks.compactMap { hook -> [String: Any]? in
-                guard let hook = hook as? [String: Any] else {
-                    return nil
-                }
-
-                return isManagedHook(hook, managedCommand: replacingCommand) ? nil : hook
+            let filteredHooks = existingHooks.filter { hook in
+                guard let hook = hook as? [String: Any] else { return true }
+                return !isManagedHook(hook, managedCommand: replacingCommand)
             }
-
-            guard !filteredHooks.isEmpty else {
-                return nil
-            }
-
+            guard filteredHooks.count != existingHooks.count else { return item }
+            guard !filteredHooks.isEmpty else { return nil }
             group["hooks"] = filteredHooks
             return group
         }
