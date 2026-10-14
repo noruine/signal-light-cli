@@ -14,26 +14,26 @@ enum InteractiveMenu {
     static func run(terminal: Terminal) async {
         let paths = SignalLightDaemonPaths.current()
 
-        await MenuLoop.run(
-            terminal: terminal,
-            escapeHint: .escape("退出"),
-            refreshInterval: 1,
-            context: {
-                let snapshot = StatusSnapshot.current(paths: paths)
-                var lines = snapshot.menuHeaderLines(terminal: terminal)
-                if let hint = nextStepHint(paths: paths, snapshot: snapshot) {
-                    lines.append("\(terminal.emoji(CLIGlyph.next))\(hint)")
+        await MenuScreenBuffer.withAlternateBuffer {
+            await MenuLoop.run(
+                terminal: terminal,
+                escapeHint: .escape("退出"),
+                refreshInterval: 1,
+                context: {
+                    let snapshot = StatusSnapshot.current(paths: paths)
+                    var lines = snapshot.menuHeaderLines(terminal: terminal)
+                    if let hint = nextStepHint(paths: paths, snapshot: snapshot) {
+                        lines.append("\(terminal.emoji(CLIGlyph.next))\(hint)")
+                    }
+                    return lines
+                },
+                buildItems: {
+                    let snapshot = StatusSnapshot.current(paths: paths)
+                    let state = MenuState(paths: paths, snapshot: snapshot)
+                    return buildItems(state: state, snapshot: snapshot, paths: paths, terminal: terminal)
                 }
-                return lines
-            },
-            buildItems: {
-                let snapshot = StatusSnapshot.current(paths: paths)
-                let state = MenuState(paths: paths, snapshot: snapshot)
-                return buildItems(state: state, snapshot: snapshot, paths: paths, terminal: terminal)
-            }
-        )
-        // Stay in the normal screen buffer so wheel scrolling navigates
-        // terminal scrollback instead of becoming arrow-key input.
+            )
+        }
     }
 
     /// One-line "here's where you are" nudge shown above the list until the

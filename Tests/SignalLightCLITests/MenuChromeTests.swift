@@ -100,16 +100,17 @@ struct MenuChromeTests {
         ).contains("会话      2 个（运行中 1、空闲 1）"))
     }
 
-    @Test("The interactive menu leaves wheel scrolling in terminal scrollback")
-    func menuDoesNotSwitchToAlternateScreen() throws {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Sources/SignalLightCLICore/Menu/InteractiveMenu.swift")
-            .standardizedFileURL
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+    @Test("The menu brackets rendering with screen and wheel modes")
+    func menuScreenBufferLifecycle() async {
+        var events: [String] = []
 
-        #expect(!source.contains("[?1049h"))
-        #expect(!source.contains("[?1049l"))
+        let result = await MenuScreenBuffer.withAlternateBuffer(emit: { events.append($0) }) {
+            events.append("menu")
+            return "done"
+        }
+
+        #expect(result == "done")
+        #expect(events == ["\u{1B}[?1049h\u{1B}[?1007l", "menu", "\u{1B}[?1049l"])
     }
 
     @Test("The breadcrumb reads root, then the trail")
