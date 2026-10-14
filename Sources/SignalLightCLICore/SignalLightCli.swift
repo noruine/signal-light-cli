@@ -12,7 +12,7 @@ extension Terminal.ColorMode: ExpressibleByArgument {}
 /// rather than read from a global/singleton, so `--color=never` (say) can
 /// never leak between commands or accidentally depend on call order.
 struct GlobalOptions: ParsableArguments {
-    @Option(name: .long, help: "着色/emoji 模式：auto（默认，仅交互终端启用）、always、never。")
+    @Option(name: .long, help: "颜色与 emoji 输出方式。")
     var color: Terminal.ColorMode = .auto
 
     @Flag(name: .shortAndLong, help: "输出更多细节。")
@@ -87,6 +87,10 @@ public enum SignalLightCLIEntry {
         // going through `parseAsRoot`/`parse`), so this path must never touch
         // `GlobalOptions` before an actual parse happens.
         let arguments = Array(CommandLine.arguments.dropFirst())
+        if let help = localizedHelp(arguments: arguments) {
+            print(help)
+            return
+        }
         if arguments.isEmpty {
             let terminal = Terminal(colorMode: .auto)
             if terminal.isInteractive {
@@ -114,5 +118,55 @@ public enum SignalLightCLIEntry {
         } catch {
             SignalLightCLI.exit(withError: error)
         }
+    }
+
+    private static func localizedHelp(arguments: [String]) -> String? {
+        guard arguments.contains(where: { ["--help", "-h"].contains($0) })
+            || arguments.first == "help"
+        else { return nil }
+
+        let commandArguments = arguments.filter { !$0.hasPrefix("-") && $0 != "help" }
+        var command: ParsableCommand.Type = SignalLightCLI.self
+        for name in commandArguments {
+            guard let next = command.configuration.subcommands.first(where: {
+                $0._commandName == name
+                    || $0.configuration.aliases.contains(name)
+            }) else { continue }
+            command = next
+        }
+
+        var message = SignalLightCLI.helpMessage(for: command)
+        message = message
+            .replacingOccurrences(of: "Show the version.", with: "显示版本号。")
+            .replacingOccurrences(of: "Show help information.", with: "显示帮助信息。")
+        message = message.replacingOccurrences(
+            of: #"See '([^']+)' for detailed help\."#,
+            with: "运行「$1」查看详细帮助。",
+            options: .regularExpression
+        )
+        message = message.replacingOccurrences(
+            of: #";\s*default:\s*([^)]+)\)"#,
+            with: "；默认值：$1）",
+            options: .regularExpression
+        )
+        message = message.replacingOccurrences(of: "(values: ", with: "（可选值：")
+            .replacingOccurrences(of: "claude、codex)", with: "claude、codex）")
+            .replacingOccurrences(of: "。 （", with: "。（")
+        message = message.replacingOccurrences(
+            of: #"\(default: ([^)]+)\)"#,
+            with: "（默认值：$1）",
+            options: .regularExpression
+        )
+        message = message
+            .replacingOccurrences(of: "auto, always, never", with: "auto、always、never")
+            .replacingOccurrences(of: "claude, codex", with: "claude、codex")
+            .replacingOccurrences(of: "codex)", with: "codex）")
+        message = message.replacingOccurrences(of: "OVERVIEW:", with: "说明：")
+            .replacingOccurrences(of: "USAGE:", with: "用法：")
+            .replacingOccurrences(of: "OPTIONS:", with: "选项：")
+            .replacingOccurrences(of: "ARGUMENTS:", with: "参数：")
+            .replacingOccurrences(of: "SUBCOMMANDS:", with: "子命令：")
+            .replacingOccurrences(of: "。 （", with: "。（")
+        return message
     }
 }
