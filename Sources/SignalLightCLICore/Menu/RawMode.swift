@@ -75,6 +75,13 @@ enum RawMode {
         tcflush(STDIN_FILENO, TCIFLUSH)
     }
 
+    /// Notes whether the menu currently sits on the alternate screen, so the
+    /// fatal-signal guard can hand the terminal back before dying instead of
+    /// stranding the user inside a screen the dead process drew.
+    static func noteAlternateScreen(_ active: Bool) {
+        signalGuard.noteAlternateScreen(active)
+    }
+
     /// What a just-read `Esc` byte (0x1B) turned out to be.
     enum Escape {
         case lone       // a real Escape keypress → treat as cancel/back
@@ -129,6 +136,13 @@ private final class RawModeSignalGuard: @unchecked Sendable {
     private let queue = DispatchQueue(label: "app.signal-light.cli.rawmode-signals")
     private var saved: termios?
     private var sources: [DispatchSourceSignal] = []
+    private var inAlternateScreen = false
+
+    func noteAlternateScreen(_ active: Bool) {
+        lock.lock()
+        inAlternateScreen = active
+        lock.unlock()
+    }
 
     /// Remembers the settings to put back and, once per process, installs the
     /// handlers. `SIG_IGN` first: a dispatch source only sees the signal when
@@ -161,13 +175,18 @@ private final class RawModeSignalGuard: @unchecked Sendable {
 
     /// Put the settings back, then die the way the default disposition would
     /// have: callers must still see "killed by SIGINT", not a clean exit that
-    /// hides the interrupt.
+    /// hides the interrupt. The alternate screen goes back first — dying
+    /// inside it would leave the user staring at a menu from a dead process.
     private func restoreAndReraise(_ number: Int32) {
         lock.lock()
         let snapshot = saved
+        let wasAlternate = inAlternateScreen
         saved = nil
         lock.unlock()
 
+        if wasAlternate {
+            FileHandle.standardError.write(Data("\u{1B}[?1049l".utf8))
+        }
         if var snapshot {
             tcsetattr(STDIN_FILENO, TCSAFLUSH, &snapshot)
         }
