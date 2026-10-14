@@ -35,6 +35,13 @@ struct Audit: AsyncParsableCommand {
         let liveSocketPaths = Set(report.liveSockets.map(\.path))
         let keptForeignPaths = Set(report.keptForeignEntries.map(\.path))
 
+        // Inside the menu the breadcrumb already names the screen; only a
+        // bare `signal-light audit` needs its title, like `status` does.
+        if !CLIRuntimeContext.isMenuSession {
+            terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))文件清单")
+            terminal.out("")
+        }
+
         // One legend line, then dots only: the per-row verdict words were
         // the part that read like something had gone wrong. ● is the status
         // header's own dot, minus its good/bad colors — in an inventory every

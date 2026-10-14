@@ -19,7 +19,7 @@ enum DaemonPause {
         let wasLoaded = control.jobInfo().isLoaded
 
         if wasLoaded {
-            terminal.progress("暂停后台服务，腾出蓝牙连接…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.stop))暂停后台服务，释放蓝牙连接…")
             await control.bootoutAndWait()
             // The process is gone, but the firmware still needs a beat to
             // notice the BLE disconnect and free its single connection slot.
@@ -43,7 +43,7 @@ enum DaemonPause {
     /// A failed restore must be said out loud — silently leaving the light
     /// dead after a calibrate/preview would look like the command broke it.
     private static func resumeDaemon(terminal: Terminal, control: LaunchAgentControl) {
-        terminal.progress("恢复后台服务…")
+        terminal.progress("\(terminal.emoji(CLIGlyph.start))恢复后台服务…")
         do {
             try control.bootstrap()
         } catch {

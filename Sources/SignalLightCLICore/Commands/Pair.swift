@@ -273,7 +273,7 @@ struct Unpair: AsyncParsableCommand {
         let control = LaunchAgentControl(paths: paths)
 
         if control.jobInfo().isLoaded {
-            terminal.progress("先停下后台服务…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.unpair))先停下后台服务…")
             await control.bootoutAndWait()
         }
 

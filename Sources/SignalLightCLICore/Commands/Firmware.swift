@@ -141,7 +141,7 @@ struct Firmware: AsyncParsableCommand {
                 CLIRuntimeContext.markCommandCancelled(.silentCancel)
                 return nil
             }
-            terminal.progress("正在下载固件（\(info.hardware)，最长约 1 分钟，按 Ctrl-C 取消）…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.firmware))正在下载固件（\(info.hardware)，最长约 1 分钟，按 Ctrl-C 取消）…")
             do {
                 let downloaded = try await runWhileListeningForCancel(terminal: terminal) {
                     try await FirmwareUpdateChecker().downloadLatest(hardware: info.hardware)
@@ -245,9 +245,9 @@ enum FirmwareSupport {
             // the manifest below is always the legacy board's. Say which one
             // was compared, or a non-esp32c3 user would read a verdict about
             // somebody else's hardware.
-            terminal.progress("跳过读设备，按 \(SignalLightDeviceInfo.legacyHardware) 的固件清单检查…")
+            terminal.progress("\(terminal.emoji(CLIGlyph.firmware))跳过读设备，按 \(SignalLightDeviceInfo.legacyHardware) 的固件清单检查…")
         }
-        terminal.progress("正在检查更新…")
+        terminal.progress("\(terminal.emoji(CLIGlyph.firmware))正在检查更新…")
         return try await FirmwareUpdateChecker().check(hardware: info.hardware, currentVersion: info.version)
     }
 

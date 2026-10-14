@@ -14,6 +14,13 @@
 #   check, its "查残留" suggestions), and scanning is not sold with its
 #   mechanics.
 #
+# And it keeps the register written, not spoken: 马上 / 腾出 were the
+# colloquial leftovers; the standard words are 立即 / 释放.
+#
+# Finally, operation headlines carry their glyph: a flow that mixes
+# glyphed and bare headline lines reads as two styles, so the bare
+# forms below fail the check before they can drift back in.
+#
 # Usage: scripts/check-cli-copy.sh
 
 set -euo pipefail
@@ -49,8 +56,12 @@ if hits:
 
 stale_hints = re.compile(r"回车|空格|↑/↓ 选择")
 retired = re.compile(r"expect-clean|只扫描|不建立长连接|确认无残留|查残留")
+colloquial = re.compile(r"马上|腾出")
+bare_headlines = re.compile(r"^(正在检查更新|正在下载固件|跳过读设备|先停下后台服务|暂停后台服务|恢复后台服务)")
 hint_hits: list[str] = []
 retired_hits: list[str] = []
+colloquial_hits: list[str] = []
+headline_hits: list[str] = []
 for path in sorted(sources.rglob("*.swift")):
     for number, line in enumerate(path.read_text().split("\n"), 1):
         if line.strip().startswith("//"):
@@ -62,6 +73,10 @@ for path in sorted(sources.rglob("*.swift")):
                 hint_hits.append(where)
             if retired.search(text):
                 retired_hits.append(where)
+            if colloquial.search(text):
+                colloquial_hits.append(where)
+            if bare_headlines.search(text):
+                headline_hits.append(where)
 
 if hint_hits:
     print("Key hints drifted away from the key names:")
@@ -77,6 +92,22 @@ if retired_hits:
         print(f"  {hit}")
     print("")
     print("Uninstall deletes this command; nothing may send users back to it afterwards.")
+    sys.exit(1)
+
+if colloquial_hits:
+    print("Copy uses a colloquial word where a standard one belongs:")
+    for hit in colloquial_hits:
+        print(f"  {hit}")
+    print("")
+    print("Say 立即 / 释放: the product's voice is written Chinese, not spoken.")
+    sys.exit(1)
+
+if headline_hits:
+    print("Progress headlines lost their operation glyph:")
+    for hit in headline_hits:
+        print(f"  {hit}")
+    print("")
+    print("Prefix them with the operation's terminal.emoji(CLIGlyph…), like the connect lines do.")
     sys.exit(1)
 
 print("CLI copy check passed.")
