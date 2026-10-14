@@ -38,6 +38,13 @@ struct MenuChromeTests {
         #expect(emitted == ["\u{1B}[2J\u{1B}[H"])
     }
 
+    @Test("The header's hooks segment names the hooked agents, or 未接入")
+    func hooksSegmentWording() {
+        #expect(StatusSnapshot.menuHooksDescription(for: []) == "未接入")
+        #expect(StatusSnapshot.menuHooksDescription(for: ["codex"]) == "codex")
+        #expect(StatusSnapshot.menuHooksDescription(for: ["claude", "codex"]) == "claude + codex")
+    }
+
     @Test("The breadcrumb reads root, then the trail")
     func breadcrumbTrail() {
         #expect(plain.menuBreadcrumb() == "信号灯")

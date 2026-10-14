@@ -45,6 +45,10 @@ struct StatusSnapshot {
     /// the paired name.
     let deviceName: String?
 
+    /// CLI ids (`claude` / `codex`) of the agents whose hooks are installed —
+    /// the fact that decides whether the light follows a session at all.
+    let hookedAgents: [String]
+
     /// Whether the service's process is actually alive. `isLoaded` alone can't
     /// answer that: a job that exited cleanly (killed with SIGTERM outside
     /// `service stop`) stays registered in launchd with no process, and
@@ -63,6 +67,9 @@ struct StatusSnapshot {
         let pairedDeviceName = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL))?.name
         let stateIsLive = isStateLive(state, jobInfo: jobInfo)
         let deviceName = stateIsLive ? (state?.deviceName ?? pairedDeviceName) : pairedDeviceName
+        let hookedAgents = HookAgent.allCases
+            .filter { (try? HooksAgentSupport.status($0, paths: paths))?.managedHooksPresent ?? false }
+            .map(\.rawValue)
 
         return StatusSnapshot(
             paths: paths,
@@ -72,7 +79,8 @@ struct StatusSnapshot {
             state: state,
             stateIsLive: stateIsLive,
             pairedDeviceName: pairedDeviceName,
-            deviceName: deviceName
+            deviceName: deviceName,
+            hookedAgents: hookedAgents
         )
     }
 
@@ -127,6 +135,7 @@ struct StatusSnapshot {
             segments.append("蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)")
             segments.append("当前 \(menuBucketDescription)")
         }
+        segments.append("hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
         return ["    " + segments.joined(separator: "   ")]
     }
 
@@ -167,6 +176,18 @@ struct StatusSnapshot {
             return "—"
         }
         return "\(SignalLightBucketDisplay.emoji(parsed))\(SignalLightBucketDisplay.name(parsed))"
+    }
+
+    /// `codex`, `claude + codex`, or `未接入` — which agents' hooks are in,
+    /// so a menu that looks healthy can't hide "no session will ever light
+    /// it".
+    private var menuHooksDescription: String {
+        Self.menuHooksDescription(for: hookedAgents)
+    }
+
+    /// Pure so the wordings stay pinned by a test.
+    static func menuHooksDescription(for agents: [String]) -> String {
+        agents.isEmpty ? "未接入" : agents.joined(separator: " + ")
     }
 
     /// Abbreviates against the home `SignalLightDaemonPaths` resolves (which
