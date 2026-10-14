@@ -62,12 +62,11 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let resolvedHooksBinaryURL = resolvedHooksBinaryURL(explicitURL: hooksBinaryURL)
 
-        let settingsData = try? Data(contentsOf: settingsURL)
-        let manifest = try loadManifest(at: manifestURL)
-        let managedCommand = manifest?.hookCommand ?? resolvedHooksBinaryURL.map { ClaudeHookInstaller.hookCommand(for: $0.path, source: hookSource) }
+        let settingsData = try readIfPresent(settingsURL)
+        let manifest = loadManifest(at: manifestURL)
         let uninstallMutation = try ClaudeHookInstaller.uninstallSettingsJSON(
             existingData: settingsData,
-            managedCommand: managedCommand
+            managedCommand: resolvedManagedCommand(manifest: manifest)
         )
 
         return ClaudeHookInstallationStatus(
@@ -87,7 +86,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
 
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let existingSettings = try readIfPresent(settingsURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -125,11 +124,11 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
     public func uninstall() throws -> ClaudeHookInstallationStatus {
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
-        let manifest = try loadManifest(at: manifestURL)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let manifest = loadManifest(at: manifestURL)
+        let existingSettings = try readIfPresent(settingsURL)
         let mutation = try ClaudeHookInstaller.uninstallSettingsJSON(
             existingData: existingSettings,
-            managedCommand: manifest?.hookCommand
+            managedCommand: resolvedManagedCommand(manifest: manifest)
         )
 
         if mutation.changed {
@@ -150,15 +149,36 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         return try status()
     }
 
-    private func loadManifest(at url: URL) throws -> ClaudeHookInstallerManifest? {
+    /// The bytes of a file that may legitimately be absent. Missing reports
+    /// as nil; present-but-unreadable throws — treating that as "no file"
+    /// would let a later write replace content nobody ever looked at.
+    private func readIfPresent(_ url: URL) throws -> Data? {
         guard fileManager.fileExists(atPath: url.path) else {
             return nil
         }
+        return try Data(contentsOf: url)
+    }
 
-        let data = try Data(contentsOf: url)
+    /// The exact command string this tool writes — matched byte-for-byte to
+    /// recognize only its own hooks. Prefers the install record; without
+    /// one, the current hooks binary path still names the only command this
+    /// tool ever writes, so dead entries are cleaned up instead of stranded.
+    private func resolvedManagedCommand(manifest: ClaudeHookInstallerManifest?) -> String {
+        manifest?.hookCommand ?? ClaudeHookInstaller.hookCommand(for: managedHooksBinaryURL.path, source: hookSource)
+    }
+
+    private func loadManifest(at url: URL) -> ClaudeHookInstallerManifest? {
+        // This tool's own record: when it is missing, unreadable or
+        // malformed, degrade to "no record" — the fallback match (the exact
+        // command for the current binary path) still finds the hooks this
+        // install wrote, and a reinstall rewrites the record. Failing an
+        // uninstall over our own bookkeeping would strand those hooks.
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(ClaudeHookInstallerManifest.self, from: data)
+        return try? decoder.decode(ClaudeHookInstallerManifest.self, from: data)
     }
 
     private func resolvedHooksBinaryURL(explicitURL: URL?) -> URL? {

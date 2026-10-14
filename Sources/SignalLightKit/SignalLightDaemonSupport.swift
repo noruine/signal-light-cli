@@ -378,8 +378,10 @@ public enum DaemonCleanup {
     /// `socketIsInactive` reports true for them (never unlink a socket a
     /// live process still holds — that one is reported under `liveSockets`,
     /// not as residue), then prunes now-empty owned directories
-    /// innermost-first. Missing files are skipped, not errors — the whole
-    /// operation is idempotent by construction.
+    /// innermost-first. Missing files are skipped and unremovable ones
+    /// (permissions, a busy file) never abort the rest — whatever stays on
+    /// disk is reported as residue by the audit pass below, so the whole
+    /// operation is idempotent by construction and cannot fail wholesale.
     @discardableResult
     public static func perform(
         paths: SignalLightDaemonPaths,
@@ -393,14 +395,20 @@ public enum DaemonCleanup {
                 report.keptForeignEntries.append(file)
                 continue
             }
-            try fileManager.removeItem(at: file)
-            report.removedFiles.append(file)
+            if removeIgnoringFailure(file, fileManager: fileManager) {
+                report.removedFiles.append(file)
+            }
         }
 
         for socket in paths.ownedSockets where fileManager.fileExists(atPath: socket.path) {
-            if socketIsInactive(socket) {
-                try fileManager.removeItem(at: socket)
-                report.removedFiles.append(socket)
+            // Only ever unlink an actual socket entry: a directory at this
+            // path is somebody's tree, and `removeItem` would take it whole.
+            if isDirectory(socket, fileManager: fileManager) {
+                report.keptForeignEntries.append(socket)
+            } else if socketIsInactive(socket) {
+                if removeIgnoringFailure(socket, fileManager: fileManager) {
+                    report.removedFiles.append(socket)
+                }
             } else {
                 report.liveSockets.append(socket)
             }
@@ -410,18 +418,24 @@ public enum DaemonCleanup {
             guard fileManager.fileExists(atPath: dir.path) else {
                 continue
             }
-            let contents = try fileManager.contentsOfDirectory(atPath: dir.path)
+            guard let contents = try? fileManager.contentsOfDirectory(atPath: dir.path) else {
+                continue
+            }
             // Finder drops `.DS_Store` into any directory the user has ever
             // browsed. It's view metadata, not data — it must never block
             // zero-trace removal of a directory whose real contents are gone.
             guard contents.allSatisfy(isIgnorableDirectoryEntry) else {
                 continue
             }
+            var allRemoved = true
             for entry in contents {
-                try fileManager.removeItem(at: dir.appendingPathComponent(entry))
+                if !removeIgnoringFailure(dir.appendingPathComponent(entry), fileManager: fileManager) {
+                    allRemoved = false
+                }
             }
-            try fileManager.removeItem(at: dir)
-            report.removedDirs.append(dir)
+            if allRemoved, removeIgnoringFailure(dir, fileManager: fileManager) {
+                report.removedDirs.append(dir)
+            }
         }
 
         let auditReport = audit(paths: paths, fileManager: fileManager, socketIsInactive: socketIsInactive)
@@ -458,7 +472,9 @@ public enum DaemonCleanup {
             }
         }
         for socket in paths.ownedSockets where fileManager.fileExists(atPath: socket.path) {
-            if socketIsInactive(socket) {
+            if isDirectory(socket, fileManager: fileManager) {
+                report.keptForeignEntries.append(socket)
+            } else if socketIsInactive(socket) {
                 report.remaining.append(socket)
             } else {
                 report.liveSockets.append(socket)
@@ -481,6 +497,18 @@ public enum DaemonCleanup {
 
     private static func isIgnorableDirectoryEntry(_ name: String) -> Bool {
         name == ".DS_Store"
+    }
+
+    /// `removeItem` that never throws: an entry that refuses to leave
+    /// (permissions, an open handle) must not abort the rest of the cleanup.
+    /// Whatever stays on disk is picked up as residue by the audit pass, so
+    /// the failure still surfaces to the caller — as a report, not a crash.
+    private static func removeIgnoringFailure(_ url: URL, fileManager: FileManager) -> Bool {
+        (try? fileManager.removeItem(at: url)) != nil
+    }
+
+    private static func isDirectory(_ url: URL, fileManager: FileManager) -> Bool {
+        (try? fileManager.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType == .typeDirectory
     }
 
     /// `FileManager.fileExists` follows symlinks, so a dangling one (its

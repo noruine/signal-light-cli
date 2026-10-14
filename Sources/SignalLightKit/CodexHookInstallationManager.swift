@@ -60,13 +60,12 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
         let resolvedHooksBinaryURL = resolvedHooksBinaryURL(explicitURL: hooksBinaryURL)
 
-        let configContents = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
-        let hooksData = try? Data(contentsOf: hooksURL)
-        let manifest = try loadManifest(at: manifestURL)
-        let managedCommand = manifest?.hookCommand ?? resolvedHooksBinaryURL.map { CodexHookInstaller.hookCommand(for: $0.path) }
+        let configContents = try readTextIfPresent(configURL) ?? ""
+        let hooksData = try readIfPresent(hooksURL)
+        let manifest = loadManifest(at: manifestURL)
         let managedHooksPresent = ((try? CodexHookInstaller.uninstallHooksJSON(
             existingData: hooksData,
-            managedCommand: managedCommand
+            managedCommand: resolvedManagedCommand(manifest: manifest)
         ))?.changed) == true
 
         return CodexHookInstallationStatus(
@@ -89,8 +88,8 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let hooksURL = codexDirectory.appendingPathComponent("hooks.json")
         let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
 
-        let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let existingConfig = try readTextIfPresent(configURL) ?? ""
+        let existingHooks = try readIfPresent(hooksURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -139,11 +138,11 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let hooksURL = codexDirectory.appendingPathComponent("hooks.json")
         let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
 
-        let manifest = try loadManifest(at: manifestURL)
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let manifest = loadManifest(at: manifestURL)
+        let existingHooks = try readIfPresent(hooksURL)
         let hooksMutation = try CodexHookInstaller.uninstallHooksJSON(
             existingData: existingHooks,
-            managedCommand: manifest?.hookCommand
+            managedCommand: resolvedManagedCommand(manifest: manifest)
         )
 
         if hooksMutation.changed {
@@ -161,7 +160,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         // has any business touching the feature flag: a no-op uninstall must
         // leave the config exactly as it found it.
         if let manifest, manifest.enabledCodexHooksFeature, !hooksMutation.hasRemainingHooks {
-            let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
+            let existingConfig = try readTextIfPresent(configURL) ?? ""
             let featureMutation = CodexHookInstaller.disableCodexHooksFeatureIfManaged(in: existingConfig)
 
             if featureMutation.changed {
@@ -177,15 +176,43 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         return try status()
     }
 
-    private func loadManifest(at url: URL) throws -> CodexHookInstallerManifest? {
+    /// The bytes of a file that may legitimately be absent. Missing reports
+    /// as nil; present-but-unreadable throws — treating that as "no file"
+    /// would let a later write replace content nobody ever looked at.
+    private func readIfPresent(_ url: URL) throws -> Data? {
         guard fileManager.fileExists(atPath: url.path) else {
             return nil
         }
+        return try Data(contentsOf: url)
+    }
 
-        let data = try Data(contentsOf: url)
+    private func readTextIfPresent(_ url: URL) throws -> String? {
+        guard fileManager.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The exact command string this tool writes — matched byte-for-byte to
+    /// recognize only its own hooks. Prefers the install record; without
+    /// one, the current hooks binary path still names the only command this
+    /// tool ever writes, so dead entries are cleaned up instead of stranded.
+    private func resolvedManagedCommand(manifest: CodexHookInstallerManifest?) -> String {
+        manifest?.hookCommand ?? CodexHookInstaller.hookCommand(for: managedHooksBinaryURL.path)
+    }
+
+    private func loadManifest(at url: URL) -> CodexHookInstallerManifest? {
+        // This tool's own record: when it is missing, unreadable or
+        // malformed, degrade to "no record" — the fallback match (the exact
+        // command for the current binary path) still finds the hooks this
+        // install wrote, and a reinstall rewrites the record. Failing an
+        // uninstall over our own bookkeeping would strand those hooks.
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(CodexHookInstallerManifest.self, from: data)
+        return try? decoder.decode(CodexHookInstallerManifest.self, from: data)
     }
 
     private func resolvedHooksBinaryURL(explicitURL: URL?) -> URL? {

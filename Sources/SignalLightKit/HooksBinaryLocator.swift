@@ -28,7 +28,12 @@ public enum ManagedHooksBinary {
         )
 
         if resolvedSourceURL != resolvedDestinationURL {
-            if fileManager.fileExists(atPath: resolvedDestinationURL.path) {
+            if let attributes = try? fileManager.attributesOfItem(atPath: resolvedDestinationURL.path) {
+                // Removing a directory would take its whole tree with it — a
+                // directory here is not this tool's to delete.
+                if attributes[.type] as? FileAttributeType == .typeDirectory {
+                    throw ManagedHooksBinaryError.destinationIsDirectory(resolvedDestinationURL)
+                }
                 try fileManager.removeItem(at: resolvedDestinationURL)
             }
             try fileManager.copyItem(at: resolvedSourceURL, to: resolvedDestinationURL)
@@ -68,6 +73,18 @@ public enum ManagedHooksBinary {
         fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent(".signal-light", isDirectory: true)
             .appendingPathComponent("bin", isDirectory: true)
+    }
+}
+
+/// Why staging the `agent-hooks` helper could not go through.
+public enum ManagedHooksBinaryError: Error, LocalizedError, Equatable {
+    case destinationIsDirectory(URL)
+
+    public var errorDescription: String? {
+        switch self {
+        case .destinationIsDirectory(let url):
+            "\(url.path) is a directory; refusing to replace it with the hooks helper."
+        }
     }
 }
 

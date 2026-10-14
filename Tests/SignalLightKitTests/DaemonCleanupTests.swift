@@ -47,4 +47,19 @@ struct DaemonCleanupTests {
         #expect(!report.remaining.contains(paths.bridgeSocketURL))
         #expect(FileManager.default.fileExists(atPath: paths.bridgeSocketURL.path))
     }
+
+    @Test("A directory at the socket path is kept as a foreign entry")
+    func socketPathDirectoryIsPreserved() throws {
+        let (home, paths) = try makeHome()
+        try FileManager.default.removeItem(at: paths.bridgeSocketURL)
+        try FileManager.default.createDirectory(at: paths.bridgeSocketURL, withIntermediateDirectories: false)
+        let marker = paths.bridgeSocketURL.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: marker)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let report = try DaemonCleanup.perform(paths: paths, socketIsInactive: { _ in true })
+
+        #expect(report.keptForeignEntries.contains(paths.bridgeSocketURL))
+        #expect(try String(contentsOf: marker, encoding: .utf8) == "keep")
+    }
 }

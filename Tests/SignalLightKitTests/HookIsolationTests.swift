@@ -130,6 +130,69 @@ struct HookIsolationTests {
         #expect(ManagedHooksBinary.defaultURL().standardizedFileURL.path == expected.standardizedFileURL.path)
     }
 
+    @Test("Managed binary install refuses to replace a destination directory")
+    func managedBinaryPreservesDestinationDirectory() throws {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sl-test-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let source = scratch.appendingPathComponent("source")
+        let destination = scratch.appendingPathComponent("agent-hooks", isDirectory: true)
+        let marker = destination.appendingPathComponent("keep.txt")
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: source)
+        try Data("keep".utf8).write(to: marker)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        do {
+            try ManagedHooksBinary.install(from: source, to: destination)
+            Issue.record("Expected install to reject a destination directory.")
+        } catch let error as ManagedHooksBinaryError {
+            #expect(error == .destinationIsDirectory(destination))
+        }
+        #expect(try String(contentsOf: marker, encoding: .utf8) == "keep")
+    }
+
+    @Test("Uninstall finds managed hooks when the install manifest is missing")
+    func uninstallFindsHooksWithoutManifest() throws {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sl-test-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let claudeDirectory = scratch.appendingPathComponent("claude", isDirectory: true)
+        let codexDirectory = scratch.appendingPathComponent("codex", isDirectory: true)
+        let binaryURL = scratch.appendingPathComponent("bin/agent-hooks")
+        try FileManager.default.createDirectory(at: claudeDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: codexDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let claudeCommand = ClaudeHookInstaller.hookCommand(for: binaryURL.path)
+        let claudeSettings = try ClaudeHookInstaller.installSettingsJSON(
+            existingData: nil,
+            hookCommand: claudeCommand
+        )
+        try #require(claudeSettings.contents).write(
+            to: claudeDirectory.appendingPathComponent("settings.json")
+        )
+
+        let codexCommand = CodexHookInstaller.hookCommand(for: binaryURL.path)
+        let codexHooks = try CodexHookInstaller.installHooksJSON(existingData: nil, hookCommand: codexCommand)
+        try #require(codexHooks.contents).write(to: codexDirectory.appendingPathComponent("hooks.json"))
+        let codexConfig = codexDirectory.appendingPathComponent("config.toml")
+        try "[features]\nhooks = true\n".write(to: codexConfig, atomically: true, encoding: .utf8)
+
+        let claudeManager = ClaudeHookInstallationManager(
+            claudeDirectory: claudeDirectory,
+            managedHooksBinaryURL: binaryURL
+        )
+        let codexManager = CodexHookInstallationManager(
+            codexDirectory: codexDirectory,
+            managedHooksBinaryURL: binaryURL
+        )
+        _ = try claudeManager.uninstall()
+        _ = try codexManager.uninstall()
+
+        #expect(!FileManager.default.fileExists(atPath: claudeDirectory.appendingPathComponent("settings.json").path))
+        #expect(!FileManager.default.fileExists(atPath: codexDirectory.appendingPathComponent("hooks.json").path))
+        #expect(try String(contentsOf: codexConfig, encoding: .utf8) == "[features]\nhooks = true\n")
+    }
+
     @Test("The locator honors SIGNAL_LIGHT_HOOKS_BINARY and ignores the old key")
     func locatorEnvOverride() throws {
         let scratch = FileManager.default.temporaryDirectory
