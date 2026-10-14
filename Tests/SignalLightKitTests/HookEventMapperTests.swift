@@ -21,6 +21,27 @@ struct HookEventMapperTests {
         #expect(event.isQuestion)
     }
 
+    @Test("Claude AskUserQuestion starts waiting from PreToolUse")
+    func claudePreToolQuestion() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/tmp","tool_name":"AskUserQuestion"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.kind == .permissionRequest)
+        #expect(event.isQuestion)
+    }
+
+    @Test("Claude unrelated pre-tool hooks are ignored")
+    func claudeUnrelatedPreTool() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/tmp","tool_name":"Bash"}"#)
+        #expect(HookEventMapper.event(from: payload) == nil)
+    }
+
+    @Test("Claude failed tool completion maps to running activity")
+    func claudeFailedToolCompletion() throws {
+        let payload = try decodeClaude(#"{"hook_event_name":"PostToolUseFailure","session_id":"s1","cwd":"/tmp","tool_name":"Bash"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+        #expect(event.kind == .postToolUse)
+    }
+
     @Test("Claude subagent hooks are dropped")
     func claudeSubagent() throws {
         let payload = try decodeClaude(#"{"hook_event_name":"UserPromptSubmit","session_id":"s1","cwd":"/tmp","agent_id":"sub"}"#)

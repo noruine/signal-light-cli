@@ -15,8 +15,11 @@ public enum HookEventMapper {
         switch payload.hookEventName {
         case .sessionStart: kind = .sessionStart
         case .userPromptSubmit: kind = .userPromptSubmit
+        case .preToolUse:
+            guard payload.toolName == "AskUserQuestion" else { return nil }
+            kind = .permissionRequest
         case .permissionRequest: kind = .permissionRequest
-        case .postToolUse: kind = .postToolUse
+        case .postToolUse, .postToolUseFailure: kind = .postToolUse
         case .stop: kind = .stop
         case .stopFailure: kind = .stopFailure
         case .sessionEnd: kind = .sessionEnd

@@ -45,16 +45,15 @@ public enum ClaudeHookInstallerError: Error, LocalizedError {
 public enum ClaudeHookInstaller {
     public static let managedTimeout = 86_400
 
-    /// The minimum event set that drives the signal light's four buckets:
-    /// `SessionStart`/`UserPromptSubmit` → running, `PermissionRequest` →
-    /// waiting for approval or for an answer, `Stop` → idle, plus `StopFailure`
-    /// and `SessionEnd` so a turn or session that ends without `Stop` doesn't
-    /// leave the light stuck on running. Everything else Claude Code fires is
-    /// detail this product doesn't consume.
+    /// Tracks submitted prompts, approval requests, user questions, tool
+    /// completion and turn/session endings for the signal light.
     private static let eventSpecs: [(name: String, matcher: String?, timeout: Int?)] = [
         ("SessionStart", nil, nil),
         ("UserPromptSubmit", nil, nil),
+        ("PreToolUse", "AskUserQuestion", managedTimeout),
         ("PermissionRequest", "*", managedTimeout),
+        ("PostToolUse", nil, managedTimeout),
+        ("PostToolUseFailure", nil, managedTimeout),
         ("Stop", nil, nil),
         ("StopFailure", nil, nil),
         ("SessionEnd", nil, nil),

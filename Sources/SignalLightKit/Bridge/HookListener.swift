@@ -12,6 +12,7 @@ public actor HookListener {
     private let onBucketChange: @Sendable (SignalLightBucket) -> Void
     private let acceptQueue = DispatchQueue(label: "app.signal-light.hook-listener")
     private let connectionQueue = DispatchQueue(label: "app.signal-light.hook-connections", attributes: .concurrent)
+    private var refreshTask: Task<Void, Never>?
     private var listenFD: Int32 = -1
     private var acceptSource: (any DispatchSourceRead)?
 
@@ -78,11 +79,23 @@ public actor HookListener {
         }
         source.resume()
 
+        let refreshRegistry = registry
+        let refreshCallback = onBucketChange
+        refreshTask = Task.detached {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { return }
+                await refreshRegistry.refresh(onBucketChange: refreshCallback)
+            }
+        }
+
         listenFD = fd
         acceptSource = source
     }
 
     public func stop() {
+        refreshTask?.cancel()
+        refreshTask = nil
         acceptSource?.cancel()
         acceptSource = nil
         if listenFD >= 0 {
@@ -106,7 +119,7 @@ public actor HookListener {
 
         // Apply before acking: the ack promises the event reached the state
         // machine, not merely the socket — clients may act on that.
-        onBucketChange(await registry.apply(event))
+        await registry.apply(event, onBucketChange: onBucketChange)
 
         let ack = Data(#"{"ok":true}"#.utf8) + Data([0x0A])
         _ = ack.withUnsafeBytes { write(fd, $0.baseAddress, ack.count) }

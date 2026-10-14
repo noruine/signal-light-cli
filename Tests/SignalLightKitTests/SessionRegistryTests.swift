@@ -46,12 +46,60 @@ struct SessionRegistryTests {
         #expect(await registry.apply(event(.permissionRequest, session: "approval")) == .needsApproval)
     }
 
-    @Test("Tool activity does not clear a pending approval")
-    func toolActivityKeepsPendingApproval() async {
+    @Test("Tool completion clears a pending approval without clearing other sessions")
+    func toolCompletionClearsApproval() async {
         let registry = SessionRegistry()
-        _ = await registry.apply(event(.permissionRequest))
-        #expect(await registry.apply(event(.postToolUse)) == .needsApproval)
-        #expect(await registry.apply(event(.userPromptSubmit)) == .needsApproval)
+        _ = await registry.apply(event(.permissionRequest, session: "approval"))
+        _ = await registry.apply(event(.userPromptSubmit, session: "running"))
+        #expect(await registry.bucket() == .needsApproval)
+
+        #expect(await registry.apply(event(.postToolUse, session: "approval")) == .running)
+        #expect(await registry.snapshot()["claude:running"]?.phase == .running)
+    }
+
+    @Test("A new prompt clears a pending question in its session")
+    func newPromptClearsQuestion() async {
+        let registry = SessionRegistry()
+        _ = await registry.apply(event(.permissionRequest, question: true))
+
+        #expect(await registry.apply(event(.userPromptSubmit)) == .running)
+    }
+
+    @Test("Waiting attention expires after a day")
+    func waitingAttentionExpires() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(start)
+        let registry = SessionRegistry(now: { clock.now })
+        _ = await registry.apply(event(.permissionRequest, question: true))
+        #expect(await registry.bucket() == .needsAnswer)
+
+        clock.advance(by: 25 * 60 * 60)
+        #expect(await registry.bucket() == .idle)
+    }
+
+    @Test("Concurrent updates publish their buckets in registry order")
+    func concurrentNotificationsStayOrdered() async {
+        let registry = SessionRegistry()
+        let recorder = BucketRecorder()
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                _ = await registry.apply(
+                    event(.permissionRequest, session: "waiting"),
+                    onBucketChange: recorder.append
+                )
+            }
+            group.addTask {
+                _ = await registry.apply(
+                    event(.userPromptSubmit, session: "running"),
+                    onBucketChange: recorder.append
+                )
+            }
+        }
+
+        let currentBucket = await registry.bucket()
+        #expect(recorder.values.last == currentBucket)
+        #expect(currentBucket == .needsApproval)
     }
 
     @Test("Stop, failure and interrupt all return to idle")
@@ -94,12 +142,43 @@ struct SessionRegistryTests {
         #expect(await registry.bucket() == .idle)
     }
 
+    @Test("Refresh publishes an expired running bucket")
+    func refreshPublishesExpiry() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(start)
+        let registry = SessionRegistry(now: { clock.now })
+        let recorder = BucketRecorder()
+        _ = await registry.apply(event(.userPromptSubmit))
+
+        clock.advance(by: 3 * 60 * 60)
+        await registry.refresh(onBucketChange: recorder.append)
+
+        #expect(recorder.values == [.idle])
+    }
+
     @Test("A payload version the daemon does not know is dropped")
     func unknownVersionsAreIgnored() async throws {
         let registry = SessionRegistry()
         let json = #"{"version":99,"source":"claude","kind":"UserPromptSubmit","sessionID":"s1","isQuestion":false}"#
         let event = try JSONDecoder().decode(HookEvent.self, from: Data(json.utf8))
         #expect(await registry.apply(event) == .idle)
+    }
+}
+
+private final class BucketRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [SignalLightBucket] = []
+
+    var values: [SignalLightBucket] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func append(_ bucket: SignalLightBucket) {
+        lock.lock()
+        defer { lock.unlock() }
+        recorded.append(bucket)
     }
 }
 

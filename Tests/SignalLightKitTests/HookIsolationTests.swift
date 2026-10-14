@@ -120,6 +120,25 @@ struct HookIsolationTests {
         #expect(!matcher.contains("compact"))
     }
 
+    @Test("Managed hooks observe answers and completed tools")
+    func managedHooksObserveResolutionEvents() throws {
+        #expect(ClaudeHookInstaller.managedEventNames.contains("PreToolUse"))
+        #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUse"))
+        #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUseFailure"))
+        #expect(CodexHookInstaller.managedEventNames.contains("PostToolUse"))
+
+        let installed = try ClaudeHookInstaller.installSettingsJSON(
+            existingData: nil,
+            hookCommand: managedCommand
+        )
+        let contents = try #require(installed.contents)
+        let object = try JSONSerialization.jsonObject(with: contents)
+        let root = try #require(object as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let groups = try #require(hooks["PreToolUse"] as? [[String: Any]])
+        #expect(groups.contains { $0["matcher"] as? String == "AskUserQuestion" })
+    }
+
     @Test("Codex uninstall without our hooks leaves the file byte-for-byte alone")
     func codexUninstallNoOpLeavesForeignFileUntouched() throws {
         let existing = try foreignSettingsJSON()

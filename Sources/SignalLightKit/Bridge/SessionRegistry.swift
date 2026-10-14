@@ -22,6 +22,9 @@ public actor SessionRegistry {
     /// A `running` phase older than this counts as idle: an agent killed
     /// mid-turn never sends `Stop`, and a green light forever would lie.
     private static let runningLifetime: TimeInterval = 2 * 60 * 60
+    /// Attention can wait longer than active work, but must not survive a
+    /// lost SessionEnd forever.
+    private static let attentionLifetime: TimeInterval = 24 * 60 * 60
     /// Idle sessions are kept only so a late `SessionEnd` has something to
     /// land on; a day is plenty.
     private static let idleLifetime: TimeInterval = 24 * 60 * 60
@@ -37,10 +40,16 @@ public actor SessionRegistry {
 
     /// Applies one hook event and returns the bucket the light should show.
     @discardableResult
-    public func apply(_ event: HookEvent, at timestamp: Date? = nil) -> SignalLightBucket {
+    public func apply(
+        _ event: HookEvent,
+        at timestamp: Date? = nil,
+        onBucketChange: (@Sendable (SignalLightBucket) -> Void)? = nil
+    ) -> SignalLightBucket {
         let timestamp = timestamp ?? now()
         guard event.version == HookEvent.currentVersion else {
-            return bucket(at: timestamp)
+            let currentBucket = bucket(at: timestamp)
+            onBucketChange?(currentBucket)
+            return currentBucket
         }
 
         let key = Self.key(for: event)
@@ -59,12 +68,8 @@ public actor SessionRegistry {
             }
 
         case .userPromptSubmit, .postToolUse:
-            // Work is happening again — but a pending approval or question
-            // stays on screen until the user answers it.
             update(key, source: event.source, at: timestamp) { session in
-                if session.phase == .idle {
-                    session.phase = .running
-                }
+                session.phase = .running
             }
 
         case .permissionRequest:
@@ -74,7 +79,16 @@ public actor SessionRegistry {
         }
 
         prune(at: timestamp)
-        return bucket(at: timestamp)
+        let currentBucket = bucket(at: timestamp)
+        onBucketChange?(currentBucket)
+        return currentBucket
+    }
+
+    /// Recomputes expiring session states and publishes the current bucket.
+    public func refresh(onBucketChange: @Sendable (SignalLightBucket) -> Void) {
+        let timestamp = now()
+        prune(at: timestamp)
+        onBucketChange(bucket(at: timestamp))
     }
 
     public func bucket(at timestamp: Date? = nil) -> SignalLightBucket {
@@ -114,8 +128,7 @@ public actor SessionRegistry {
     private func isLive(_ session: Session, at timestamp: Date) -> Bool {
         switch session.phase {
         case .waitingForApproval, .waitingForAnswer:
-            // A prompt can legitimately sit unanswered for a long time.
-            return true
+            return timestamp.timeIntervalSince(session.updatedAt) < Self.attentionLifetime
         case .running:
             return timestamp.timeIntervalSince(session.updatedAt) < Self.runningLifetime
         case .idle:

@@ -34,13 +34,13 @@ Agent 原始格式——两个 Agent 的差异只存在于转发程序里。
 | `SessionStart` | 空闲 | 新会话，尚未干活 |
 | `UserPromptSubmit` | 运行中 | 提交了提示词 |
 | `PermissionRequest`（工具） | 等待审批 | |
-| `PermissionRequest`（`AskUserQuestion`） | 等待回答 | |
-| `PostToolUse` | 运行中 | 不覆盖"等待审批/回答"——用户在终端回答后才继续 |
+| `PreToolUse`（`AskUserQuestion`） | 等待回答 | |
+| `PostToolUse` / `PostToolUseFailure` / `UserPromptSubmit` | 运行中 | 问题已回答或审批后的工具已执行 |
 | `Stop` / `StopFailure` / `Interrupt` | 空闲 | 一轮或一次会话结束 |
 | `SessionEnd` | 移除该会话 | |
 
-`running` 超过 2 小时没有更新会按空闲处理：Agent 被 `kill` 时不会补发 `Stop`，
-一直亮绿灯就是假信息。等待审批/回答不过期——提问本来就可以放很久。
+`running` 超过 2 小时没有更新、等待审批/回答超过 24 小时，会按空闲处理。
+Agent 异常退出时不会补发结束事件，因此守护进程每 30 秒重新检查过期状态。
 
 灯的颜色取所有会话里最高的那一档：**等待审批 > 等待回答 > 运行中 > 空闲**。
 
@@ -48,8 +48,8 @@ Agent 原始格式——两个 Agent 的差异只存在于转发程序里。
 
 | Agent | 事件 |
 | --- | --- |
-| Claude Code | `SessionStart` `UserPromptSubmit` `PermissionRequest` `Stop` `StopFailure` `SessionEnd` |
-| Codex | `SessionStart`（覆盖 startup/resume/clear）`UserPromptSubmit` `PermissionRequest` `Stop` `SessionEnd` `Interrupt` |
+| Claude Code | `SessionStart` `UserPromptSubmit` `PreToolUse`（`AskUserQuestion`）`PermissionRequest` `PostToolUse` `PostToolUseFailure` `Stop` `StopFailure` `SessionEnd` |
+| Codex | `SessionStart`（覆盖 startup/resume/clear）`UserPromptSubmit` `PermissionRequest` `PostToolUse` `Stop` `SessionEnd` `Interrupt` |
 
 Codex 的 `compact` 会在一轮工作中触发；压缩完成后会立即继续当前轮次，
 因此不把它当作新的空闲会话处理。

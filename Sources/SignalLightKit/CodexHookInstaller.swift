@@ -84,6 +84,7 @@ public enum CodexHookInstaller {
         ("SessionStart", "startup|resume|clear", managedTimeout),
         ("UserPromptSubmit", nil, managedTimeout),
         ("PermissionRequest", nil, managedInteractiveTimeout),
+        ("PostToolUse", nil, managedTimeout),
         ("Stop", nil, managedTimeout),
         // Codex caps these at 3 seconds and silently kills slower hooks, so
         // ask for the maximum a slow cold start might need.
