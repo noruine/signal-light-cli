@@ -27,6 +27,10 @@ enum SourceStamp {
             repoRoot.appendingPathComponent("Package.swift"),
             repoRoot.appendingPathComponent("Makefile"),
         ]
+        let resolvedDependencies = repoRoot.appendingPathComponent("Package.resolved")
+        if fileManager.fileExists(atPath: resolvedDependencies.path) {
+            files.append(resolvedDependencies)
+        }
         let sources = repoRoot.appendingPathComponent("Sources", isDirectory: true)
         guard let enumerator = fileManager.enumerator(
             at: sources,
