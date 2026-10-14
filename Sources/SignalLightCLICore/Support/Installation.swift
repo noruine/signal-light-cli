@@ -25,6 +25,7 @@ enum Installation {
     static func apply(paths: SignalLightDaemonPaths, terminal: Terminal) throws -> Outcome {
         let wasInstalled = FileManager.default.fileExists(atPath: paths.binURL.path)
 
+        try validatePathDestination(paths: paths)
         try installBinary(paths: paths, terminal: terminal)
         try linkIntoPath(paths: paths, terminal: terminal)
         installHooksBinary(paths: paths, terminal: terminal)
@@ -171,29 +172,47 @@ enum Installation {
     /// a shell rc file. Re-creates the link on every install so a stale link
     /// left over from an older path is never an issue.
     ///
-    /// `~/.local/bin` is shared with every other tool, so whatever already
-    /// sits at this path is only replaced when it is the link an earlier
-    /// install wrote; a directory is never touched (removing it would delete
-    /// its whole tree), and anything else is announced instead of silently
-    /// overwritten.
-    private static func linkIntoPath(paths: SignalLightDaemonPaths, terminal: Terminal) throws {
+    /// `~/.local/bin` is shared with every other tool, so only the link an
+    /// earlier install wrote can be replaced. Directories and foreign entries
+    /// are left in place and reported as errors.
+    static func linkIntoPath(paths: SignalLightDaemonPaths, terminal: Terminal) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: paths.pathSymlinkDir, withIntermediateDirectories: true)
+        try validatePathDestination(paths: paths, fileManager: fileManager)
 
-        if let attributes = try? fileManager.attributesOfItem(atPath: paths.pathSymlinkURL.path) {
-            if attributes[.type] as? FileAttributeType == .typeDirectory {
-                throw CLIError(
-                    "\(displayPath(paths.pathSymlinkURL)) 是个目录，安装不会去动它；把它挪走再装。",
-                    exitCode: .noInput
-                )
-            }
-            if !paths.owns(paths.pathSymlinkURL, fileManager: fileManager) {
-                terminal.warn("\(displayPath(paths.pathSymlinkURL)) 上原来有个不是本工具的链接/文件，已经替换成指向 signal-light 的链接。")
-            }
+        if fileManager.fileExists(atPath: paths.pathSymlinkURL.path)
+            || (try? fileManager.destinationOfSymbolicLink(atPath: paths.pathSymlinkURL.path)) != nil {
             try fileManager.removeItem(at: paths.pathSymlinkURL)
         }
         try fileManager.createSymbolicLink(at: paths.pathSymlinkURL, withDestinationURL: paths.binURL)
         terminal.progress("    • 链接命令 → \(displayPath(paths.pathSymlinkURL))")
+    }
+
+    static func validatePathDestination(
+        paths: SignalLightDaemonPaths,
+        fileManager: FileManager = .default
+    ) throws {
+        if (try? fileManager.destinationOfSymbolicLink(atPath: paths.pathSymlinkURL.path)) != nil {
+            guard paths.owns(paths.pathSymlinkURL, fileManager: fileManager) else {
+                throw CLIError(
+                    "\(displayPath(paths.pathSymlinkURL)) 已存在且不属于本工具，安装不会替换它。请先自行处理该路径。",
+                    exitCode: .noInput
+                )
+            }
+            return
+        }
+
+        guard let attributes = try? fileManager.attributesOfItem(atPath: paths.pathSymlinkURL.path) else { return }
+        if attributes[.type] as? FileAttributeType == .typeDirectory {
+            throw CLIError(
+                "\(displayPath(paths.pathSymlinkURL)) 是个目录，安装不会去动它；把它挪走再装。",
+                exitCode: .noInput
+            )
+        }
+        throw CLIError(
+            "\(displayPath(paths.pathSymlinkURL)) 已存在且不属于本工具，安装不会替换它。请先自行处理该路径。",
+            exitCode: .noInput
+        )
     }
 
     /// Abbreviates against the same home `SignalLightDaemonPaths` resolves
