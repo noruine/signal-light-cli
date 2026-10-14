@@ -174,7 +174,7 @@ enum PairFlow {
         _ = try? await waitForInterruptKey()
     }
 
-    private static func selectDevice(
+    static func selectDevice(
         from discovered: [SignalLightBLEDaemon.DiscoveredDevice],
         terminal: Terminal,
         device: String?,
@@ -182,10 +182,23 @@ enum PairFlow {
         trail: [String]?
     ) throws -> SignalLightBLEDaemon.DiscoveredDevice? {
         if let device {
-            guard let match = discovered.first(where: {
-                $0.name.localizedCaseInsensitiveContains(device) || $0.id.uuidString.localizedCaseInsensitiveContains(device)
-            }) else {
+            let exactMatches = discovered.filter {
+                $0.name.localizedCaseInsensitiveCompare(device) == .orderedSame
+                    || $0.id.uuidString.localizedCaseInsensitiveCompare(device) == .orderedSame
+            }
+            let matches = exactMatches.isEmpty
+                ? discovered.filter {
+                    $0.name.localizedCaseInsensitiveContains(device)
+                        || $0.id.uuidString.localizedCaseInsensitiveContains(device)
+                }
+                : exactMatches
+
+            guard !matches.isEmpty else {
                 throw CLIError("没找到叫 “\(device)” 的设备。", exitCode: .unavailable)
+            }
+            guard matches.count == 1, let match = matches.first else {
+                let choices = matches.map { "\($0.name)（\($0.id.uuidString)）" }.joined(separator: "、")
+                throw CLIError("“\(device)”匹配到多个设备：\(choices)。请用完整 UUID 指定。", exitCode: .usage)
             }
             return match
         }
