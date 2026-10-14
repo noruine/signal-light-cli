@@ -28,6 +28,9 @@ struct LightModelTests {
         #expect(SignalLightFirmwareVersion("1.2.3")! == SignalLightFirmwareVersion("1.2.3")!)
         #expect(SignalLightFirmwareVersion("2.0") == nil)
         #expect(SignalLightFirmwareVersion("a.b.c") == nil)
+        #expect(SignalLightFirmwareVersion("-1.2.3") == nil)
+        #expect(SignalLightFirmwareVersion("1.-2.3") == nil)
+        #expect(SignalLightFirmwareVersion("1.2.-3") == nil)
     }
 
     @Test("Bucket raw values are a persisted contract")

@@ -13,7 +13,10 @@ public struct SignalLightFirmwareVersion: Comparable, Sendable {
         guard parts.count == 3,
               let major = Int(parts[0]),
               let minor = Int(parts[1]),
-              let patch = Int(parts[2]) else {
+              let patch = Int(parts[2]),
+              major >= 0,
+              minor >= 0,
+              patch >= 0 else {
             return nil
         }
         self.major = major
