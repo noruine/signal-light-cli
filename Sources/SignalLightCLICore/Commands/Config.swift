@@ -91,14 +91,10 @@ struct Config: AsyncParsableCommand {
                 effect.colors = try ConfigFormat.parseColors(colors)
             }
             if let interval {
-                guard interval >= 0 else {
-                    throw CLIError("间隔不能是负数。", exitCode: .usage)
-                }
                 effect.intervalMs = interval
             }
-
-            if effect.type != .solid, effect.intervalMs <= 0 {
-                throw CLIError("\(effect.type.rawValue) 类型需要 --interval 大于 0 的毫秒值。", exitCode: .usage)
+            if let error = ConfigFormat.intervalValidationError(effect.intervalMs, for: effect.type) {
+                throw error
             }
 
             settings.effects[targetBucket] = effect
@@ -234,6 +230,16 @@ enum SignalLightBucketDisplay {
 }
 
 enum ConfigFormat {
+    static func intervalValidationError(_ interval: Int, for type: SignalLightEffectType) -> CLIError? {
+        if interval < 0 {
+            return CLIError("间隔不能是负数。", exitCode: .usage)
+        }
+        if type != .solid, interval == 0 {
+            return CLIError("\(type.rawValue) 类型需要 --interval 大于 0 的毫秒值。", exitCode: .usage)
+        }
+        return nil
+    }
+
     static func parseColors(_ raw: String) throws -> [SignalLightColor] {
         let letters = raw.uppercased().filter { !",， ".contains($0) }
         guard !letters.isEmpty else {

@@ -59,6 +59,12 @@ enum ConfigMenu {
             interval = value
         }
 
+        if let error = ConfigFormat.intervalValidationError(interval, for: type) {
+            terminal.errorLine(error.message)
+            MenuPrompt.pause(terminal)
+            return
+        }
+
         let edited = SignalLightEffect(type: type, colors: colors, intervalMs: interval)
         await previewIfWanted(edited, paths: paths, terminal: terminal)
 
