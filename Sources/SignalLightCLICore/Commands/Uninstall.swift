@@ -43,7 +43,7 @@ struct Uninstall: AsyncParsableCommand {
         // keychain), so the file cleanup below can't reach it; take it out
         // first while its certificate file still exists on disk.
         let identityRemoval = SigningIdentity.removeIdentity(
-            storeDirectory: paths.devSigningDir,
+            storeDirectory: paths.signingDir,
             keychain: SigningIdentity.loginKeychain(home: paths.home)
         )
         let identityParts = [

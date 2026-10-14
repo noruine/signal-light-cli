@@ -117,12 +117,12 @@ public struct SignalLightDaemonPaths: Sendable {
     /// Where `sign` keeps the local self-signed certificate (the private key
     /// only lives in the login keychain). Owned so uninstall removes it like
     /// everything else.
-    public var devSigningDir: URL {
-        cliRootDir.appendingPathComponent("dev-signing", isDirectory: true)
+    public var signingDir: URL {
+        cliRootDir.appendingPathComponent("signing", isDirectory: true)
     }
 
-    public var devSigningCertURL: URL {
-        devSigningDir.appendingPathComponent("cert.pem")
+    public var signingCertURL: URL {
+        signingDir.appendingPathComponent("cert.pem")
     }
 
     public var launchAgentsDir: URL {
@@ -153,7 +153,7 @@ public struct SignalLightDaemonPaths: Sendable {
     /// gone the now-dangling symlink would stop reporting as "exists" and a
     /// naive sequential cleanup would leave it behind forever.
     public var ownedFiles: [URL] {
-        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, buildJSONURL, devSigningCertURL, logURL, launchAgentPlistURL]
+        [pathSymlinkURL, binURL, hooksBinaryURL, deviceJSONURL, stateJSONURL, settingsJSONURL, buildJSONURL, signingCertURL, logURL, launchAgentPlistURL]
     }
 
     /// Socket files this CLI writes at runtime, which must only be removed
@@ -170,7 +170,7 @@ public struct SignalLightDaemonPaths: Sendable {
         // made audit and uninstall print the same row twice. Dedupe by
         // standardized path, keeping the innermost-first order.
         var seen = Set<String>()
-        return [binDir, devSigningDir, cliRootDir, userDir].filter { seen.insert($0.standardizedFileURL.path).inserted }
+        return [binDir, signingDir, cliRootDir, userDir].filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     /// Whether cleanup may delete the entry at `url`.

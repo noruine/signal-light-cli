@@ -40,12 +40,12 @@ struct DaemonPathsTests {
         let paths = SignalLightDaemonPaths(home: home)
         let standardized = paths.pruneDirsIfEmpty.map(\.standardizedFileURL.path)
         #expect(Set(standardized).count == standardized.count)
-        #expect(paths.pruneDirsIfEmpty.contains(paths.devSigningDir))
+        #expect(paths.pruneDirsIfEmpty.contains(paths.signingDir))
     }
 
     @Test("The signing certificate is part of the uninstall inventory")
     func signingCertificateIsOwned() {
         let paths = SignalLightDaemonPaths(home: home)
-        #expect(paths.ownedFiles.contains(paths.devSigningCertURL))
+        #expect(paths.ownedFiles.contains(paths.signingCertURL))
     }
 }
