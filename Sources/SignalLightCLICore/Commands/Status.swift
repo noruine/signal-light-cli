@@ -59,6 +59,10 @@ struct StatusSnapshot {
         jobInfo.isLoaded && jobInfo.pid != nil
     }
 
+    var liveStateUpdatedAt: Date? {
+        stateIsLive ? state?.updatedAt : nil
+    }
+
     static func current(paths: SignalLightDaemonPaths) -> StatusSnapshot {
         let control = LaunchAgentControl(paths: paths)
         let jobInfo = control.jobInfo()
@@ -341,7 +345,7 @@ struct StatusSnapshot {
             currentBucket: stateIsLive ? state?.currentBucket : nil,
             sessions: stateIsLive ? state?.sessions : nil,
             stateLive: stateIsLive,
-            stateUpdatedAt: state.map { ISO8601DateFormatter().string(from: $0.updatedAt) },
+            stateUpdatedAt: liveStateUpdatedAt.map { ISO8601DateFormatter().string(from: $0) },
             logPath: paths.logURL.path
         )
         let encoder = JSONEncoder()

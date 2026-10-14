@@ -148,6 +148,31 @@ struct MenuChromeTests {
         ))
     }
 
+    @Test("A stale daemon snapshot does not expose its update timestamp")
+    func staleStatusOmitsStateTimestamp() {
+        let state = SignalLightDaemonState(
+            ble: .connected,
+            deviceName: "blinkenlights",
+            currentBucket: "running",
+            sessions: [],
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            pid: 42
+        )
+        let snapshot = StatusSnapshot(
+            paths: SignalLightDaemonPaths(home: URL(fileURLWithPath: "/tmp")),
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: false, pid: nil),
+            runAtLoad: nil,
+            toolInstalled: true,
+            state: state,
+            stateIsLive: false,
+            pairedDeviceName: "blinkenlights",
+            deviceName: "blinkenlights",
+            hookedAgents: []
+        )
+
+        #expect(snapshot.liveStateUpdatedAt == nil)
+    }
+
     @Test("The menu brackets rendering with screen and wheel modes")
     func menuScreenBufferLifecycle() async {
         var events: [String] = []
