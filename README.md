@@ -1,99 +1,136 @@
 # signal-light
 
-红绿灯（ESP32-C3）的命令行驱动：不用开 App，在终端里配对、调灯效、跑后台服务，
-让 Claude Code / Codex 的会话状态直接体现在实体灯上。macOS 14 起。
+`signal-light` 用于在 macOS 上配对和控制 ESP32-C3 三色信号灯。接入 Agent 后，
+信号灯会显示会话状态。目前支持：
 
-- **两个可执行文件**：`signal-light`（CLI + 守护进程）、`agent-hooks`（Agent 钩子转发）。
-- **一个库**：`SignalLightKit`（BLE、灯效模型、会话状态、钩子协议）。
-- **不需要图形界面，也不接管审批**：权限请求和提问留在 Agent 自己的终端里，灯只做提示。
+1. Claude Code
+2. Codex
 
-## 快速开始
+需要 macOS 14 或更高版本。
 
-```bash
-make install                # 构建并安装到本机（重复运行即更新；make help 看全部入口）
-signal-light pair           # 扫描 → 选中你的灯（多盏时务必看清名字）
-signal-light service start  # 启动后台服务（launchd）
-signal-light hooks install  # 接入 Claude Code / Codex（勾选界面）
-signal-light                # 不带参数进交互菜单
+审批和回答仍在 Claude Code 或 Codex 中进行，信号灯只显示状态。
+
+## 安装
+
+在仓库目录运行：
+
+```sh
+make install
 ```
 
-只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`；直接 `swift build` 需要自己加）。之后新开终端直接敲 `signal-light`。
+此命令会构建并安装当前版本。首次运行会安装，以后可用同一命令更新。更新会保留
+配对信息、灯效配置和开机启动设置；只有后台服务正在运行时，才会重启以加载新版本。
 
-升级就是重新跑 `make install`（仓库有远端的话先 `git pull` 拿新代码）：配对、灯效配置、launchd 设置一律保留；后台服务在运行的话自动重启。没有变化时说一句「已是最新」，不会白装一遍。装好后敲 `signal-light upgrade` 也会检查源码库：没有新代码就说「已是最新」，有就问你要不要升级。已经构建过的话，也可以直接 `.build/release/signal-light upgrade`。
+从已安装的程序运行 `signal-light upgrade`，会检查安装时记录的源码仓库；有改动时，
+程序会询问是否更新。从仓库更新时，运行 `make install` 即可。
 
-## 命令
+## 首次使用
 
-从仓库装到本机用 `make install`（见快速开始）；下表是本机侧的命令。
+按顺序完成配对、启动服务和接入 Agent：
 
-| 命令 | 作用 |
-| --- | --- |
-| `upgrade` / `uninstall` | 检查有没有新代码并升级 / 卸载（可一并移除 Agent 钩子） |
-| `sign` | 可选：配置固定签名，重建程序后蓝牙授权继续有效 |
-| `pair` / `unpair` | 配对红绿灯 / 忘掉已配对设备（会先停服务） |
-| `service start\|stop\|restart\|autostart` | 后台服务与开机自启 |
-| `hooks install\|status\|uninstall` | 接入 / 查看 / 移除 Claude Code、Codex 钩子 |
-| `config` | 各状态的灯效、全局亮度、总开关 |
-| `calibrate` | 接线校准：逐个点亮引脚，记下红/黄/绿接在哪 |
-| `firmware check\|update` | 检查新固件 / OTA 升级（升级中按 Ctrl-C 可取消） |
-| `rename` | 查看或修改灯的蓝牙广播名称（不带参数只看本机记录） |
-| `status` / `logs` / `doctor` / `audit` | 状态、日志、体检、文件清单 |
+```sh
+signal-light pair
+signal-light service start
+signal-light hooks install
+```
 
-## 灯的表现
+- 配对时请确认设备名称。附近有多盏灯时，请按名称或 UUID 选择。`--first` 只在扫描到
+  唯一设备时才会自动选择；非交互环境请用 `--device` 指定设备。
+- `signal-light service start` 会启动后台服务，但不会设置登录时自动启动。需要自动启动时，
+  再运行 `signal-light service autostart enable`。
+- 在交互终端中运行 `signal-light hooks install` 会显示 Agent 选择界面；也可以直接指定
+  `claude` 或 `codex`。
+- Codex 首次接入后，还需在 Codex 中运行 `/hooks` 并确认信任，钩子才会生效。
 
-| 灯态 | 默认灯效 | 什么时候出现 |
+直接运行 `signal-light` 可打开交互菜单。常用命令如下：
+
+- 查看状态、日志、诊断或文件清单：`signal-light status`、`signal-light logs`、
+  `signal-light doctor`、`signal-light audit`。
+- 启动、停止或重启服务：`signal-light service start`、`signal-light service stop`、
+  `signal-light service restart`。
+- 设置登录时自动启动：`signal-light service autostart enable`、
+  `signal-light service autostart disable`、`signal-light service autostart status`。
+- 配对、解除配对或校准接线：`signal-light pair`、`signal-light unpair`、
+  `signal-light calibrate`。
+- 查看或修改设备名称：`signal-light rename`；带上新名称即可修改。
+- 查看或修改灯效：`signal-light config`、`signal-light config set`、
+  `signal-light config brightness`。
+- 接入、查看或移除 hooks：`signal-light hooks install`、`signal-light hooks status`、
+  `signal-light hooks uninstall`。
+- 检查或更新固件：`signal-light firmware check`、`signal-light firmware update`。
+- 升级或卸载程序：`signal-light upgrade`、`signal-light uninstall`。
+- 配置固定签名：`signal-light sign`。它会把签名身份写入登录钥匙串并重新签名已安装
+  程序；服务运行时会重启，macOS 会再次请求蓝牙权限。此后更新可沿用同一签名。
+
+其他命令和参数见 `signal-light --help`，或运行 `signal-light <命令> --help`。
+
+## 灯的状态
+
+| 状态 | 默认灯效 | 含义 |
 | --- | --- | --- |
-| 😴 空闲 | 绿色呼吸 | 没有会话在跑 |
-| 🏃 运行中 | 黄色闪烁 | 会话开始 / 提交新提示 |
-| 🙋 等待审批 | 黄红呼吸 | Agent 请求权限 |
-| ❓ 等待回答 | 黄绿呼吸 | Agent 提问等你选 |
+| 空闲 | 绿色呼吸 | 当前没有运行中的会话 |
+| 运行中 | 黄色闪烁 | 会话开始或提交了新提示 |
+| 等待审批 | 黄红呼吸 | Agent 正在请求权限 |
+| 等待回答 | 黄绿呼吸 | Agent 正在等待你的回答 |
 
-多个会话同时在跑时：**等待审批 > 等待回答 > 运行中 > 空闲**。灯效可在菜单的灯效设置或 `config` 里修改。
+多个会话同时运行时，显示优先级为：等待审批、等待回答、运行中、空闲。可以在菜单
+中修改灯效和亮度，也可以用 `signal-light config set` 或
+`signal-light config brightness` 调整。关闭信号灯总开关不会停止后台服务。
 
-## Agent hooks
+## 接入 Agent
 
-只装驱动灯态所需的最小事件集：
+安装时只配置驱动灯态所需的事件：
 
-| Agent | 装的事件 |
-| --- | --- |
-| Claude Code | `SessionStart` `UserPromptSubmit` `PermissionRequest` `Stop` `StopFailure` `SessionEnd` |
-| Codex | `SessionStart`（覆盖 startup/resume/clear/compact）`UserPromptSubmit` `PermissionRequest` `Stop` `SessionEnd` `Interrupt` |
+支持的事件：
 
-- 只动本工具写入的条目，原有 hooks（claude-island、cmux 等）不受影响；重复执行幂等。
-- **Codex 需要手动信任一次**：装完后在 Codex 里运行 `/hooks` 确认信任，钩子才会运行。
-- 审批和提问照常在 Agent 的终端里回答；hook 与弹窗并行，灯只提示、不拦截。
+- Claude Code：`SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、
+  `StopFailure`、`SessionEnd`。
+- Codex：`SessionStart`（启动、恢复、清空、压缩后继续）、`UserPromptSubmit`、
+  `PermissionRequest`、`Stop`、`SessionEnd`、`Interrupt`。
 
-## 磁盘布局
+安装和卸载只会修改 signal-light 自己添加的 hooks，不会改动其他配置。重复安装不会
+重复添加。hooks 只转发会话事件，不处理审批，也不会阻塞 Agent。
+
+卸载本程序时，Agent 配置默认保留。交互操作时可以选择同时移除 signal-light 写入的
+hooks；脚本中使用 `signal-light uninstall --yes --remove-hooks`。
+
+钩子协议和状态映射见 [docs/bridge.md](docs/bridge.md)。
+
+## 固件更新
+
+运行 `signal-light firmware check` 检查版本，运行 `signal-light firmware update` 更新。
+默认从项目维护的固件清单下载对应设备的固件，也可以用 `--file` 指定本地文件。
+更新时后台服务会暂时停止，完成后恢复；过程中不要断电或关闭程序。
+
+固件由 [open-vibe-island](https://github.com/itdragons/open-vibe-island) 仓库的
+`wg` 分支维护。CLI 从该项目的版本清单获取版本和下载地址。
+
+## 问题排查
+
+- 配对前请确认选中的是自己的灯。附近可能有其他设备；扫描到多盏时按名称或 UUID 选择。
+- 灯没有响应时，依次运行 `signal-light status`、`signal-light doctor` 和
+  `signal-light logs`，检查设备连接、配置和服务日志。
+- Agent 事件没有反映到灯上时，运行 `signal-light hooks status` 检查 hooks 是否已安装；
+  Codex 还需完成 `/hooks` 信任确认。
+- 单次运行中跳过 hooks，可设置环境变量 `SIGNAL_LIGHT_SKIP_HOOKS=1`。
+
+## 文件位置
 
 | 内容 | 位置 |
 | --- | --- |
-| 程序与数据 | `~/.signal-light/`（`bin/`、`device.json`、`settings.json`、`state.json`、日志） |
-| 命令 | `~/.local/bin/signal-light` |
-| launchd | `~/Library/LaunchAgents/app.signal-light.daemon.plist` |
-| 钩子 socket | `~/.signal-light/bridge.sock` |
+| 程序、配对信息、设置和日志 | `~/.signal-light/` |
+| 命令入口 | `~/.local/bin/signal-light` |
+| 后台服务配置 | `~/Library/LaunchAgents/app.signal-light.daemon.plist` |
+| Agent 与守护进程之间的 socket | `~/.signal-light/bridge.sock` |
+
+卸载只删除 signal-light 自己创建的文件和链接，其他文件会保留。
 
 ## 从源码构建
 
-`make build` 构建，`make test` 运行测试，`make lint` 检查格式、规则和 CLI 文案；后者需要安装 `swiftformat` 与 `swiftlint`。`make help` 列出全部入口。模块边界、开发约定和验证规则见 [AGENTS.md](AGENTS.md)。
+项目使用 Swift tools 6.2，构建时需要 Swift 6.2 或更高版本。
 
-## 固件
+- `make build`：构建程序。
+- `make test`：运行测试。
+- `make lint`：检查格式、SwiftLint 规则和 CLI 文案；需要安装 `swiftformat`、`swiftlint`。
 
-检查与下载都走网络清单，与源码放在哪无关：
-
-- 清单 `https://raw.githubusercontent.com/itdragons/open-vibe-island/wg/signal-light/<hardware>/firmware/version.json`
-- 固件 `https://cdn.jsdelivr.net/gh/itdragons/open-vibe-island@wg/signal-light/<hardware>/firmware/<file>.bin`
-
-固件源码与发布流程在 `open-vibe-island` 仓库的 `wg` 分支。
-
-## 注意
-
-- 附近可能有别人的红绿灯：`pair` 会列出扫到的设备，`--first` 只在唯一候选时才生效。
-- `service start` / `run` 使用真实主目录（launchd 与 Agent 钩子都按真实主目录找 socket）。
-- 只想让某个子进程不触发钩子：`SIGNAL_LIGHT_SKIP_HOOKS=1`。
-- 灯不亮时按顺序看：`signal-light status`（指出断在哪一环）、`doctor`（体检）、`logs`（服务实际做了什么）。
-- `--color` / `--verbose` / `--quiet` 这类全局参数写在子命令之后，例如 `signal-light status --color=never`。
-- 卸载只删本工具写下的东西：`~/.local/bin/signal-light` 只有仍是指向已安装二进制的链接才会被删；别的东西原样保留。
-- 给别人用：让对方克隆本仓库后运行 `make install`。
-
-## 来历
-
-本仓库是完全独立的命令行产品，不和 Open Island 共用任何文件与进程，也不会动对方的东西；部分功能的设计参考借鉴了 Open Island。
+模块边界和开发约定见 [AGENTS.md](AGENTS.md)。
