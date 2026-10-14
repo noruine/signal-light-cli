@@ -143,16 +143,46 @@ enum SigningIdentity {
         processRunner: ProcessRunning = SystemProcessRunner()
     ) -> (trustRemoved: Bool, identityRemoved: Bool) {
         let certURL = storeDirectory.appendingPathComponent("cert.pem")
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: certURL.path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let fingerprint = certificateFingerprint(at: certURL, processRunner: processRunner) else {
+            return (false, false)
+        }
+
         var trustRemoved = false
-        if FileManager.default.fileExists(atPath: certURL.path),
-           let result = try? processRunner.run(security, arguments: ["remove-trusted-cert", certURL.path]) {
+        if let result = try? processRunner.run(security, arguments: ["remove-trusted-cert", certURL.path]) {
             trustRemoved = result.exitCode == 0
         }
         var identityRemoved = false
-        if let result = try? processRunner.run(security, arguments: ["delete-identity", "-c", name, keychain.path]) {
+        if let result = try? processRunner.run(
+            security,
+            arguments: ["delete-identity", "-Z", fingerprint, keychain.path]
+        ) {
             identityRemoved = result.exitCode == 0
         }
         return (trustRemoved, identityRemoved)
+    }
+
+    private static func certificateFingerprint(at certificateURL: URL, processRunner: ProcessRunning) -> String? {
+        guard let result = try? processRunner.run(
+            openssl,
+            arguments: ["x509", "-in", certificateURL.path, "-noout", "-fingerprint", "-sha256"]
+        ), result.exitCode == 0,
+              let fingerprintLine = (result.stdout + result.stderr)
+                  .split(whereSeparator: \.isNewline)
+                  .first(where: { $0.localizedCaseInsensitiveContains("sha256 fingerprint=") }),
+              let separator = fingerprintLine.firstIndex(of: "=") else {
+            return nil
+        }
+
+        let fingerprint = fingerprintLine[fingerprintLine.index(after: separator)...]
+            .filter { $0 != ":" && !$0.isWhitespace }
+            .uppercased()
+        guard fingerprint.count == 64,
+              fingerprint.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+        return fingerprint
     }
 
     /// The command that finishes the trust step by hand, for when the
