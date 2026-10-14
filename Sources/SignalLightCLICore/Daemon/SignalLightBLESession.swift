@@ -22,6 +22,20 @@ enum SignalLightSessionError: Error, CustomStringConvertible {
     }
 }
 
+extension SignalLightSessionError {
+    /// Establishment failures deserve another attempt: the firmware frees
+    /// its single connection slot a beat after the daemon lets go, and the
+    /// macOS stack can still be tearing the old link down — both transient.
+    /// A bluetooth state problem or a rejected firmware reply would repeat
+    /// identically, so those fail straight through.
+    var isRetryable: Bool {
+        switch self {
+        case .connectFailed, .timedOut, .notReady, .deviceNotFound: true
+        case .bluetoothUnavailable, .firmwareRejected: false
+        }
+    }
+}
+
 /// One-shot request/response BLE client for interactive maintenance
 /// operations — calibration, firmware flashing, rename. Deliberately separate
 /// from `SignalLightBLEDaemon`, which only ever pushes effects and never reads
@@ -86,7 +100,30 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
 
     // MARK: - Connection
 
-    func connect(timeout: TimeInterval = 15) async throws {
+    /// Connects to the paired peripheral. Establishment is retried a couple
+    /// of times: the firmware frees its single connection slot a beat after
+    /// the daemon lets go (and the macOS stack can still be tearing the old
+    /// link down), so the first attempt can lose that race through no fault
+    /// of its own. `onRetry` fires before each settle so callers can say so.
+    func connect(timeout: TimeInterval = 15, onRetry: (() -> Void)? = nil) async throws {
+        var lastError: Error = SignalLightSessionError.connectFailed("未知错误")
+        for attempt in 1...3 {
+            do {
+                try await connectOnce(timeout: timeout)
+                return
+            } catch {
+                lastError = error
+                guard (error as? SignalLightSessionError)?.isRetryable == true, attempt < 3 else {
+                    throw error
+                }
+                onRetry?()
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
+        throw lastError
+    }
+
+    private func connectOnce(timeout: TimeInterval) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async { [self] in
                 connectContinuation = continuation

@@ -79,7 +79,7 @@ struct Firmware: AsyncParsableCommand {
         private func runUpdate(terminal: Terminal, deviceID: UUID) async throws {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
             terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
-            try await session.connect()
+            try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
             defer { session.disconnect() }
 
             guard session.hasOTACharacteristics else {
@@ -281,7 +281,7 @@ enum FirmwareSupport {
         return try await DaemonPause.run(terminal: terminal, control: control) {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
             terminal.progress("\(terminal.emoji(CLIGlyph.search))正在读取固件版本…")
-            try await session.connect()
+            try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
             defer { session.disconnect() }
             return SignalLightDeviceInfo.parse(try await session.readInfo())
         }

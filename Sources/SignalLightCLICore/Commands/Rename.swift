@@ -25,7 +25,7 @@ struct Rename: AsyncParsableCommand {
         try await DaemonPause.run(terminal: terminal, control: control) {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
             terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
-            try await session.connect()
+            try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
             defer { session.disconnect() }
 
             let currentName = (try? await session.getConfig())?.name
