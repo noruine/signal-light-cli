@@ -34,10 +34,9 @@ enum SignalLightDaemonRunner {
         log.startFresh()
         log.log(.info, "daemon starting (paired device: \(device.name))")
 
-        // MUST happen before `HookListener.start()`: it unlinks whatever
-        // socket file already exists at this path before binding, so skipping
-        // this check would let a fresh `run` silently hijack the socket a
-        // still-running daemon of this same tool is using.
+        // Check before `HookListener.start()` so a duplicate daemon gets the
+        // actionable service-stop message. The listener also refuses active
+        // sockets and only removes stale socket files before binding.
         if paths.ownedSockets.contains(where: SocketProbe.isActive) {
             throw CLIError(
                 "检测到 bridge socket 仍在使用中（另一个守护进程在跑）。先停掉它：signal-light service stop。",

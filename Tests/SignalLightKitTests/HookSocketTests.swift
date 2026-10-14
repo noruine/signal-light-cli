@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -44,6 +45,72 @@ struct HookSocketTests {
 
             try sendRaw(Data("not json".utf8), to: socketURL)
             #expect(await registry.bucket() == .idle)
+        }
+    }
+
+    @Test("A regular file at the socket path is preserved")
+    func regularFileAtSocketPathIsPreserved() async throws {
+        try await withSocketPath { socketURL in
+            let original = Data("owned by another process".utf8)
+            try original.write(to: socketURL)
+
+            let listener = HookListener(socketURL: socketURL, registry: SessionRegistry()) { _ in }
+            var refused = false
+            do {
+                try await listener.start()
+            } catch {
+                refused = true
+            }
+
+            #expect(refused)
+            #expect(try Data(contentsOf: socketURL) == original)
+        }
+    }
+
+    @Test("A second listener cannot unlink an active socket")
+    func activeSocketIsPreserved() async throws {
+        try await withSocketPath { socketURL in
+            let registry = SessionRegistry()
+            let listener = HookListener(socketURL: socketURL, registry: registry) { _ in }
+            try await listener.start()
+            defer { Task { await listener.stop() } }
+
+            let secondListener = HookListener(socketURL: socketURL, registry: SessionRegistry()) { _ in }
+            var refused = false
+            do {
+                try await secondListener.start()
+            } catch {
+                refused = true
+            }
+            #expect(refused)
+            #expect(UnixSocket.isActive(path: socketURL.path))
+
+            let sent = HookSocketClient.send(
+                HookEvent(source: .claude, kind: .userPromptSubmit, sessionID: "still-listening"),
+                to: socketURL
+            )
+            #expect(sent)
+            #expect(await registry.bucket() == .running)
+        }
+    }
+
+    @Test("A stale socket file is replaced on restart")
+    func staleSocketIsReplaced() async throws {
+        try await withSocketPath { socketURL in
+            var address = try #require(UnixSocket.address(for: socketURL.path))
+            var descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+            #expect(descriptor >= 0)
+            defer { if descriptor >= 0 { close(descriptor) } }
+            let result = UnixSocket.withSockaddr(&address) { bind(descriptor, $0, $1) }
+            #expect(result == 0)
+            close(descriptor)
+            descriptor = -1
+
+            let listener = HookListener(socketURL: socketURL, registry: SessionRegistry()) { _ in }
+            try await listener.start()
+            defer { Task { await listener.stop() } }
+
+            #expect(UnixSocket.isActive(path: socketURL.path))
         }
     }
 

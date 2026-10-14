@@ -20,6 +20,17 @@ public enum UnixSocket {
         return address
     }
 
+    /// Checks whether a Unix-domain socket path accepts a connection.
+    public static func isActive(path: String) -> Bool {
+        guard var address = address(for: path) else { return false }
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+
+        let result = withSockaddr(&address) { connect(descriptor, $0, $1) }
+        return result == 0
+    }
+
     /// Calls `body` with the socket address as the C API expects it. The
     /// pointer is only valid inside the closure — that is the point.
     public static func withSockaddr<T>(

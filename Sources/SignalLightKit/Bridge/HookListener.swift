@@ -15,6 +15,7 @@ public actor HookListener {
     private var refreshTask: Task<Void, Never>?
     private var listenFD: Int32 = -1
     private var acceptSource: (any DispatchSourceRead)?
+    private var socketIdentity: (device: dev_t, inode: ino_t)?
 
     /// - Parameter onStateChange: Called after every event and refresh, even
     ///   when the resolved bucket stays the same.
@@ -37,8 +38,7 @@ public actor HookListener {
             at: socketURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        // A socket file left behind by a dead daemon would make the bind fail.
-        try? FileManager.default.removeItem(at: socketURL)
+        try removeStaleSocket()
 
         guard var address = UnixSocket.address(for: socketURL.path) else {
             throw POSIXError(.ENAMETOOLONG)
@@ -56,6 +56,18 @@ public actor HookListener {
             close(fd)
             throw error
         }
+
+        var boundSocket = stat()
+        guard lstat(socketURL.path, &boundSocket) == 0 else {
+            let error = UnixSocket.currentError()
+            close(fd)
+            throw error
+        }
+        guard boundSocket.st_mode & mode_t(S_IFMT) == mode_t(S_IFSOCK) else {
+            close(fd)
+            throw POSIXError(.EEXIST)
+        }
+        socketIdentity = (boundSocket.st_dev, boundSocket.st_ino)
 
         // Non-blocking accept: the read source tells us when work exists, and
         // the inner loop drains whatever piled up.
@@ -102,7 +114,35 @@ public actor HookListener {
             close(listenFD)
             listenFD = -1
         }
-        try? FileManager.default.removeItem(at: socketURL)
+        removeOwnedSocket()
+    }
+
+    private func removeStaleSocket() throws {
+        var current = stat()
+        guard lstat(socketURL.path, &current) == 0 else {
+            guard errno == ENOENT else { throw UnixSocket.currentError() }
+            return
+        }
+        guard current.st_mode & mode_t(S_IFMT) == mode_t(S_IFSOCK) else {
+            throw POSIXError(.EEXIST)
+        }
+        guard !UnixSocket.isActive(path: socketURL.path) else {
+            throw POSIXError(.EADDRINUSE)
+        }
+        guard unlink(socketURL.path) == 0 else { throw UnixSocket.currentError() }
+    }
+
+    private func removeOwnedSocket() {
+        defer { socketIdentity = nil }
+        guard let socketIdentity else { return }
+
+        var current = stat()
+        guard lstat(socketURL.path, &current) == 0,
+              current.st_dev == socketIdentity.device,
+              current.st_ino == socketIdentity.inode else {
+            return
+        }
+        _ = unlink(socketURL.path)
     }
 
     private static func handle(
