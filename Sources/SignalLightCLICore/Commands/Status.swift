@@ -66,7 +66,7 @@ struct StatusSnapshot {
         let toolInstalled = FileManager.default.fileExists(atPath: paths.binURL.path)
         let state = try? SignalLightDaemonStateStore.load(from: paths.stateJSONURL)
         let pairedDeviceName = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL))?.name
-        let stateIsLive = isStateLive(state, jobInfo: jobInfo)
+        let stateIsLive = isStateLive(state, jobInfo: jobInfo, processIsAlive: Self.isProcessAlive)
         let deviceName = stateIsLive ? (state?.deviceName ?? pairedDeviceName) : pairedDeviceName
         let hookedAgents = HookAgent.allCases
             .filter { (try? HooksAgentSupport.status($0, paths: paths))?.managedHooksPresent ?? false }
@@ -88,10 +88,14 @@ struct StatusSnapshot {
     /// Live ⇒ the snapshot's writer is still alive. Files written before the
     /// `pid` field existed fall back to "the launchd job is loaded", the best
     /// signal an old snapshot can offer.
-    private static func isStateLive(_ state: SignalLightDaemonState?, jobInfo: LaunchAgentControl.JobInfo) -> Bool {
+    static func isStateLive(
+        _ state: SignalLightDaemonState?,
+        jobInfo: LaunchAgentControl.JobInfo,
+        processIsAlive: (Int) -> Bool
+    ) -> Bool {
         guard let state else { return false }
         guard let pid = state.pid else { return jobInfo.isLoaded }
-        return isProcessAlive(pid)
+        return jobInfo.isLoaded && jobInfo.pid == pid && processIsAlive(pid)
     }
 
     private static func isProcessAlive(_ pid: Int) -> Bool {

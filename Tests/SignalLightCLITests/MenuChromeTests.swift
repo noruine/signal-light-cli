@@ -120,6 +120,34 @@ struct MenuChromeTests {
         ).contains("会话      2 个（运行中 1、空闲 1）"))
     }
 
+    @Test("A status snapshot is live only when launchd owns its PID")
+    func statusSnapshotChecksLaunchAgentPID() {
+        let state = SignalLightDaemonState(
+            ble: .connected,
+            deviceName: "blinkenlights",
+            currentBucket: "running",
+            sessions: [],
+            updatedAt: .now,
+            pid: 42
+        )
+
+        #expect(StatusSnapshot.isStateLive(
+            state,
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: true, pid: 42),
+            processIsAlive: { _ in true }
+        ))
+        #expect(!StatusSnapshot.isStateLive(
+            state,
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: true, pid: 99),
+            processIsAlive: { _ in true }
+        ))
+        #expect(!StatusSnapshot.isStateLive(
+            state,
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: false, pid: 42),
+            processIsAlive: { _ in true }
+        ))
+    }
+
     @Test("The menu brackets rendering with screen and wheel modes")
     func menuScreenBufferLifecycle() async {
         var events: [String] = []
