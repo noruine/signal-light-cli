@@ -29,6 +29,7 @@ struct Rename: AsyncParsableCommand {
             terminal.out("当前蓝牙名称：\(device.name)")
             return
         }
+        try Self.validateName(newName)
 
         let control = LaunchAgentControl(paths: paths)
         try await DaemonPause.run(terminal: terminal, control: control) {
@@ -38,6 +39,12 @@ struct Rename: AsyncParsableCommand {
             defer { session.disconnect() }
 
             try await applyRename(newName, session: session, deviceID: deviceID, paths: paths, terminal: terminal)
+        }
+    }
+
+    static func validateName(_ name: String) throws {
+        guard name.rangeOfCharacter(from: .controlCharacters) == nil else {
+            throw CLIError("名称不能包含控制字符。", exitCode: .usage)
         }
     }
 
