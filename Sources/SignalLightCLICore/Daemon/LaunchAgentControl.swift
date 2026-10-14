@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SignalLightKit
 
@@ -88,12 +89,6 @@ public struct LaunchAgentControl {
         try spec.serialize().write(to: paths.launchAgentPlistURL, options: .atomic)
     }
 
-    /// Unloads the job. Returns normally whether or not it was loaded —
-    /// "make sure it's stopped" is inherently idempotent.
-    public func bootout() {
-        _ = try? processRunner.run(SystemBinary.launchctl, arguments: ["bootout", serviceTarget])
-    }
-
     /// Boots the job out and then waits until the process has actually
     /// exited. `launchctl bootout` returns as soon as the termination signal
     /// is delivered, while the daemon's graceful shutdown can keep writing
@@ -101,12 +96,25 @@ public struct LaunchAgentControl {
     /// very directories `uninstall` is busy deleting, or keep holding the
     /// single BLE connection slot an interactive command is about to need.
     /// Times out rather than hanging forever if the process is wedged.
-    public func bootoutAndWait(timeout: TimeInterval = 5) async {
-        bootout()
+    public func bootoutAndWait(timeout: TimeInterval = 5) async throws {
+        let job = jobInfo()
+        guard job.isLoaded else { return }
+
+        try runChecked(["bootout", serviceTarget], failureContext: "停止后台服务失败")
+
         let deadline = Date().addingTimeInterval(timeout)
-        while jobInfo().isLoaded, Date() < deadline {
+        while true {
+            let hasExited = if let pid = job.pid {
+                !Self.isProcessAlive(pid)
+            } else {
+                !jobInfo().isLoaded
+            }
+            if hasExited { return }
+            guard Date() < deadline else { break }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
+
+        throw CLIError("等待后台服务退出超时，操作已中止。", exitCode: .unavailable)
     }
 
     public func bootstrap() throws {
@@ -160,5 +168,11 @@ public struct LaunchAgentControl {
             }
         }
         return nil
+    }
+
+    private static func isProcessAlive(_ pid: Int) -> Bool {
+        guard pid > 0 else { return false }
+        if kill(pid_t(pid), 0) == 0 { return true }
+        return errno == EPERM
     }
 }

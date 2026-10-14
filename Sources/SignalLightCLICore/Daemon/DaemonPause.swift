@@ -20,7 +20,7 @@ enum DaemonPause {
 
         if wasLoaded {
             terminal.progress("\(terminal.emoji(CLIGlyph.stop))暂停后台服务，释放蓝牙连接…")
-            await control.bootoutAndWait()
+            try await control.bootoutAndWait()
             // The process is gone, but the firmware still needs a beat to
             // notice the BLE disconnect and free its single connection slot.
             try? await Task.sleep(nanoseconds: 500_000_000)

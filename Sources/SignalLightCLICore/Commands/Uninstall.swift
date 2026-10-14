@@ -34,7 +34,7 @@ struct Uninstall: AsyncParsableCommand {
         // clean uninstall into a phantom "residue detected" failure.
         let control = LaunchAgentControl(paths: paths)
         let serviceWasLoaded = control.jobInfo().isLoaded
-        await control.bootoutAndWait()
+        try await control.bootoutAndWait()
         if serviceWasLoaded {
             terminal.progress("    • 停止 launchd 服务")
         }

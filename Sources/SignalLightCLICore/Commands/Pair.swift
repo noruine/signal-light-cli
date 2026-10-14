@@ -287,7 +287,7 @@ struct Unpair: AsyncParsableCommand {
 
         if control.jobInfo().isLoaded {
             terminal.progress("\(terminal.emoji(CLIGlyph.unpair))先停下后台服务…")
-            await control.bootoutAndWait()
+            try await control.bootoutAndWait()
         }
 
         guard FileManager.default.fileExists(atPath: paths.deviceJSONURL.path) else {

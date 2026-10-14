@@ -95,7 +95,7 @@ struct Service: AsyncParsableCommand {
                 return
             }
 
-            await control.bootoutAndWait()
+            try await control.bootoutAndWait()
             terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("服务已停止。"))")
         }
     }
