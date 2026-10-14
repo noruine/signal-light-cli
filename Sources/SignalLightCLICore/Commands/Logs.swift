@@ -3,7 +3,7 @@ import Foundation
 import SignalLightKit
 
 struct Logs: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "查看信号灯服务日志（唯一的日志文件）。")
+    static let configuration = CommandConfiguration(abstract: "查看信号灯服务日志。")
 
     @OptionGroup var globals: GlobalOptions
 

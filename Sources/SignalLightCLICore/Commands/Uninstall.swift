@@ -118,7 +118,7 @@ struct Uninstall: AsyncParsableCommand {
             terminal.warn("\(PathText.abbreviated(paths.cliRootDir)) 里还有不是本工具建的文件，已保留。")
         }
         if !alsoRemoveHooks, !CLIRuntimeContext.isMenuSession {
-            terminal.out("    未处理 Agent 的 hooks；想一起卸载：signal-light uninstall --remove-hooks")
+            terminal.out("    未处理 Agent 的 hooks（Claude Code / Codex 配置保持原样）。")
         }
     }
 

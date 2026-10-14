@@ -45,9 +45,9 @@ public enum KeyHint {
         case .move:
             "↑/↓ 移动"
         case .spaceToggle:
-            "空格 勾选"
+            "Space 勾选"
         case let .enter(action):
-            "回车 \(action)"
+            "Enter \(action)"
         case let .escape(action):
             "Esc \(action)"
         }
@@ -70,7 +70,7 @@ extension Terminal {
         return "\(emoji(CLIGlyph.trafficLight))\(segments.joined(separator: " \(dimmed("›")) "))"
     }
 
-    /// The fixed bottom line of a screen: `↑/↓ 移动 · 回车 确认 · Esc 返回`.
+    /// The fixed bottom line of a screen: `↑/↓ 移动 · Enter 确认 · Esc 返回`.
     public func keyBar(_ hints: [KeyHint]) -> String {
         hints.map(\.text).joined(separator: " · ")
     }

@@ -4,10 +4,10 @@ import SignalLightKit
 
 struct Audit: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "只读检查：列出各项文件/服务当前是否存在（卸载后确认无残留）。",
+        abstract: "只读检查：列出各项文件/服务当前是否存在。",
         discussion: """
         默认列出所有本工具管辖的文件、目录与 launchd 服务：● 表示存在，○ 表示不存在。
-        装机状态下两者都属正常；卸载后用 --expect-clean 确认没有残留——发现任何残留即以非零退出码结束。
+        装机状态下两者都属正常。
         """
     )
 
@@ -15,9 +15,6 @@ struct Audit: AsyncParsableCommand {
 
     @Flag(help: "以 JSON 格式输出。")
     var json: Bool = false
-
-    @Flag(name: .customLong("expect-clean"), help: "发现残留时以非零退出码结束（供自动化验证使用）。")
-    var expectClean: Bool = false
 
     func run() async throws {
         let paths = SignalLightDaemonPaths.current()
@@ -30,9 +27,6 @@ struct Audit: AsyncParsableCommand {
         } else {
             printHumanReadable(paths: paths, report: report, jobInfo: jobInfo)
         }
-
-        guard expectClean, !isClean else { return }
-        throw CLIError("还有残留没清干净（见上面的列表）。", exitCode: .software)
     }
 
     private func printHumanReadable(paths: SignalLightDaemonPaths, report: DaemonCleanup.Report, jobInfo: LaunchAgentControl.JobInfo) {
@@ -45,7 +39,7 @@ struct Audit: AsyncParsableCommand {
         // the part that read like something had gone wrong. ● is the status
         // header's own dot, minus its good/bad colors — in an inventory every
         // state is normal.
-        terminal.out(terminal.dimmed("● 存在，○ 不存在；装机状态下都属正常，卸载后用 --expect-clean 查残留。"))
+        terminal.out(terminal.dimmed("● 存在，○ 不存在；装机状态下都属正常。"))
         terminal.out("")
 
         for path in paths.ownedFiles + paths.ownedSockets {
@@ -66,9 +60,8 @@ struct Audit: AsyncParsableCommand {
             terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(path))")
         }
 
-        // Directories read like everything else — on disk or not; whether a
-        // survivor is removable junk is an uninstall-time question for
-        // `--expect-clean`.
+        // Directories read like everything else — on disk or not. Whether a
+        // survivor is removable junk is uninstall's question, not this one's.
         for dir in paths.pruneDirsIfEmpty {
             let exists = FileManager.default.fileExists(atPath: dir.path)
             terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(dir))")

@@ -15,9 +15,9 @@ struct MenuChromeTests {
     @Test("Key hints keep the one vocabulary")
     func keyHintWording() {
         #expect(KeyHint.move.text == "↑/↓ 移动")
-        #expect(KeyHint.spaceToggle.text == "空格 勾选")
-        #expect(KeyHint.enter("确认").text == "回车 确认")
-        #expect(KeyHint.enter("继续").text == "回车 继续")
+        #expect(KeyHint.spaceToggle.text == "Space 勾选")
+        #expect(KeyHint.enter("确认").text == "Enter 确认")
+        #expect(KeyHint.enter("继续").text == "Enter 继续")
         #expect(KeyHint.escape("返回").text == "Esc 返回")
         #expect(KeyHint.escape("退出").text == "Esc 退出")
         #expect(KeyHint.escape("取消").text == "Esc 取消")
@@ -25,10 +25,10 @@ struct MenuChromeTests {
 
     @Test("The key bar joins with the one separator in the fixed order")
     func keyBarComposition() {
-        #expect(plain.keyBar([.move, .enter("确认"), .escape("返回")]) == "↑/↓ 移动 · 回车 确认 · Esc 返回")
-        #expect(plain.keyBar([.enter("继续")]) == "回车 继续")
+        #expect(plain.keyBar([.move, .enter("确认"), .escape("返回")]) == "↑/↓ 移动 · Enter 确认 · Esc 返回")
+        #expect(plain.keyBar([.enter("继续")]) == "Enter 继续")
         #expect(plain.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")])
-            == "↑/↓ 移动 · 空格 勾选 · 回车 确认 · Esc 返回")
+            == "↑/↓ 移动 · Space 勾选 · Enter 确认 · Esc 返回")
     }
 
     @Test("The breadcrumb reads root, then the trail")
@@ -63,7 +63,7 @@ struct MenuChromeTests {
             "",
             "1. 体检",
             "",
-            "↑/↓ 移动 · 回车 确认 · Esc 返回",
+            "↑/↓ 移动 · Enter 确认 · Esc 返回",
         ])
     }
 
@@ -76,7 +76,7 @@ struct MenuChromeTests {
             body: ["● 存在"],
             bar: plain.keyBar([.enter("继续")])
         )
-        #expect(lines == ["信号灯 › 诊断 › 查看文件清单", "", "● 存在", "", "回车 继续"])
+        #expect(lines == ["信号灯 › 诊断 › 查看文件清单", "", "● 存在", "", "Enter 继续"])
     }
 
     @Test("A screen continuing another has no breadcrumb of its own")
@@ -88,7 +88,7 @@ struct MenuChromeTests {
             body: ["继续？  [否]"],
             bar: plain.keyBar([.enter("确认"), .escape("取消")])
         )
-        #expect(lines == ["继续？  [否]", "", "回车 确认 · Esc 取消"])
+        #expect(lines == ["继续？  [否]", "", "Enter 确认 · Esc 取消"])
     }
 
     @Test("A bare CLI picker keeps its info without the menu breadcrumb")
@@ -100,7 +100,7 @@ struct MenuChromeTests {
             body: ["1. 灯 A"],
             bar: plain.keyBar([.move, .enter("确认"), .escape("取消")])
         )
-        #expect(lines == ["找到 2 个设备，选择要配对的：", "", "1. 灯 A", "", "↑/↓ 移动 · 回车 确认 · Esc 取消"])
+        #expect(lines == ["找到 2 个设备，选择要配对的：", "", "1. 灯 A", "", "↑/↓ 移动 · Enter 确认 · Esc 取消"])
     }
 
     @Test("The confirm frame is question, blank line, key bar")
@@ -111,7 +111,7 @@ struct MenuChromeTests {
         #expect(lines[0].contains("是"))
         #expect(lines[0].contains("[否]"))
         #expect(lines[1].isEmpty)
-        #expect(lines[2] == "↑/↓ 移动 · 回车 确认 · Esc 取消")
+        #expect(lines[2] == "↑/↓ 移动 · Enter 确认 · Esc 取消")
     }
 
     @Test("A picker frame reads breadcrumb, context, body, then the bar")
@@ -129,7 +129,7 @@ struct MenuChromeTests {
         let text = out.joined()
         #expect(text.contains("信号灯 › 灯效设置 › 空闲"))
         #expect(text.contains("1. 常亮  solid"))
-        #expect(text.contains("↑/↓ 移动 · 回车 确认 · Esc 取消"))
+        #expect(text.contains("↑/↓ 移动 · Enter 确认 · Esc 取消"))
         if let crumb = text.range(of: "信号灯 › 灯效设置 › 空闲"),
            let context = text.range(of: "第 1 步：怎么亮"),
            let firstItem = text.range(of: "1. 常亮"),
@@ -158,7 +158,7 @@ struct MenuChromeTests {
         let text = out.joined()
         #expect(text.contains("信号灯 › 接入 Agent"))
         #expect(text.contains("[ ] Claude Code"))
-        #expect(text.contains("↑/↓ 移动 · 空格 勾选 · 回车 确认 · Esc 返回"))
+        #expect(text.contains("↑/↓ 移动 · Space 勾选 · Enter 确认 · Esc 返回"))
     }
 
     @Test("Menu endings tell silent and announced cancels apart")

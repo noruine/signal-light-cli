@@ -82,7 +82,7 @@ struct Service: AsyncParsableCommand {
     }
 
     struct Stop: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(commandName: "stop", abstract: "停止红绿灯后台服务（不会卸载，可再次 start）。")
+        static let configuration = CommandConfiguration(commandName: "stop", abstract: "停止红绿灯后台服务。")
 
         @OptionGroup var globals: GlobalOptions
 

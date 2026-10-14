@@ -117,7 +117,7 @@ enum ConfigMenu {
             guard let chosen else { return nil }
             if chosen.isEmpty {
                 terminal.warn("至少要选一个颜色。")
-                MenuPrompt.pause(terminal, message: "回车 重选")
+                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("重选")]))
                 continue
             }
             return palette.enumerated().compactMap { chosen.contains($0.offset) ? $0.element : nil }
@@ -146,7 +146,7 @@ enum ConfigMenu {
 
                 try await session.sendCommand(SignalLightCommandEncoder.encode(effect))
                 terminal.out("已发到灯上。")
-                MenuPrompt.pause(terminal, message: "回车 结束预览")
+                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("结束预览")]))
                 try? await session.sendCommand(SignalLightControlCommand.off)
             }
         } catch let cliError as CLIError {

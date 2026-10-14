@@ -32,7 +32,7 @@ enum DeviceMenu {
                 items.append(MenuChoice("\(terminal.emoji(CLIGlyph.calibrate))接线校准", crumb: "接线校准") {
                     await MenuCommandRunner.run(["calibrate"], terminal: terminal)
                 })
-                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.firmware))固件更新（检查并升级）", crumb: "固件更新（检查并升级）") {
+                items.append(MenuChoice("\(terminal.emoji(CLIGlyph.firmware))固件更新", crumb: "固件更新") {
                     await MenuCommandRunner.run(["firmware", "update"], terminal: terminal)
                 })
 

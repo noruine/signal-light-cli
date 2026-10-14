@@ -133,7 +133,7 @@ enum MultiSelect {
             let mark = preselected.contains(index) ? "[✓]" : "[ ]"
             terminal.out("  \(index + 1). \(mark) \(label)")
         }
-        guard let line = MenuPrompt.readLine("请选择要启用的 Agent，以逗号分隔；直接回车保持不变，q 取消：") else { return nil }
+        guard let line = MenuPrompt.readLine("请选择要启用的 Agent，以逗号分隔；直接按 Enter 保持不变，q 取消：") else { return nil }
         if line.lowercased() == "q" { return nil }
         if line.isEmpty { return preselected }
         var result: Set<Int> = []

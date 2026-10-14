@@ -95,7 +95,7 @@ enum MenuPrompt {
     /// Blocks until the user presses Enter (or Esc, or Ctrl-C/Ctrl-D), so
     /// command output stays on screen long enough to read before the menu
     /// redraws over it. EOF just returns. The default message is the
-    /// canonical single-key bar `回车 继续`, printed under a blank line so
+    /// canonical single-key bar `Enter 继续`, printed under a blank line so
     /// the bottom spacing matches every other screen's shell.
     ///
     /// Reads in cbreak mode rather than via cooked `readLine`: at a cooked

@@ -4,7 +4,7 @@ import SignalLightKit
 
 struct Pair: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "扫描并配对红绿灯设备（只扫描，不建立长连接）。"
+        abstract: "扫描并配对红绿灯设备。"
     )
 
     @OptionGroup var globals: GlobalOptions

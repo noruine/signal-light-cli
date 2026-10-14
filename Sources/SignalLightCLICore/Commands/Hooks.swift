@@ -323,7 +323,7 @@ enum HooksAgentSetup {
             terminal: terminal,
             trail: CLIRuntimeContext.isMenuSession ? ["接入 Agent"] : nil,
             context: {
-                ["勾上想让信号灯跟随的 Agent，回车生效。"]
+                ["勾上想让信号灯跟随的 Agent，按 Enter 生效。"]
             },
             footerHint: terminal.keyBar([.move, .spaceToggle, .enter("确认"), .escape("返回")])
         ) else {
