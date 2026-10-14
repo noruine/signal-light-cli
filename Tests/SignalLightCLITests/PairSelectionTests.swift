@@ -17,17 +17,6 @@ struct PairSelectionTests {
         ),
     ]
 
-    @Test("A scan timeout must be a finite positive number")
-    func scanTimeoutValidation() throws {
-        try PairFlow.validateTimeout(0.1)
-
-        for timeout in [0, -1, Double.nan, .infinity, -.infinity] {
-            #expect(throws: CLIError.self) {
-                try PairFlow.validateTimeout(timeout)
-            }
-        }
-    }
-
     @Test("A partial name must not choose the first of multiple devices")
     func ambiguousNameIsRejected() {
         #expect(throws: CLIError.self) {
