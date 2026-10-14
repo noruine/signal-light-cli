@@ -32,8 +32,8 @@ enum MultiSelect {
 
         var checked = preselected
         var cursor = 0
+        render(items: items, checked: checked, cursor: cursor, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
         while true {
-            render(items: items, checked: checked, cursor: cursor, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
             switch readKey() {
             case .up:
                 cursor = (cursor - 1 + items.count) % items.count
@@ -46,8 +46,9 @@ enum MultiSelect {
             case .cancel:
                 return nil
             case .other:
-                break
+                continue
             }
+            render(items: items, checked: checked, cursor: cursor, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
         }
     }
 

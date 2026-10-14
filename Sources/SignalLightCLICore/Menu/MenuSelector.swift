@@ -39,8 +39,8 @@ enum MenuSelector {
         print("\u{1B}[2J", terminator: "")    // one full clear for a clean first paint
 
         var selected = min(max(initialIndex, 0), items.count - 1)
+        render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
         while true {
-            render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
             switch readKey() {
             case .up:
                 selected = (selected - 1 + items.count) % items.count
@@ -57,8 +57,9 @@ enum MenuSelector {
             case .quit:
                 return .quit
             case .other:
-                break  // unhandled key: ignore, redraw
+                continue  // ignore mouse reports and other unrelated input
             }
+            render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
         }
     }
 
