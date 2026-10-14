@@ -36,6 +36,25 @@ extension SignalLightSessionError {
     }
 }
 
+struct BLESessionReadiness {
+    private(set) var hasCommandCharacteristic = false
+    private(set) var hasControlCharacteristic = false
+    private(set) var hasControlNotifications = false
+
+    var isReady: Bool {
+        hasCommandCharacteristic && hasControlCharacteristic && hasControlNotifications
+    }
+
+    mutating func didDiscoverCharacteristics(hasCommand: Bool, hasControl: Bool) {
+        hasCommandCharacteristic = hasCommand
+        hasControlCharacteristic = hasControl
+    }
+
+    mutating func didEnableControlNotifications(_ enabled: Bool) {
+        hasControlNotifications = enabled
+    }
+}
+
 /// One-shot request/response BLE client for interactive maintenance
 /// operations — calibration, firmware flashing, rename. Deliberately separate
 /// from `SignalLightBLEDaemon`, which only ever pushes effects and never reads
@@ -80,6 +99,7 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     /// awaits its write's ack before issuing the next.
     private var pendingWrites: [CBUUID: CheckedContinuation<Void, Error>] = [:]
     private var pendingInfoRead: CheckedContinuation<String, Error>?
+    private var readiness = BLESessionReadiness()
 
     init(pairedDeviceID: UUID) {
         self.targetID = pairedDeviceID
@@ -344,6 +364,11 @@ extension SignalLightBLESession: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
+        if let error {
+            failConnect(SignalLightSessionError.connectFailed(error.localizedDescription))
+            return
+        }
+
         for characteristic in service.characteristics ?? [] {
             switch characteristic.uuid {
             case Self.commandCharacteristicUUID: commandChar = characteristic
@@ -359,7 +384,26 @@ extension SignalLightBLESession: CBPeripheralDelegate {
         // Command + OTA-control are the baseline every operation needs (the
         // firmware reports CONFIG and OTA status over the control channel).
         // OTA-data/INFO are validated per-operation by the caller.
-        guard commandChar != nil, otaControlChar != nil else {
+        readiness.didDiscoverCharacteristics(hasCommand: commandChar != nil, hasControl: otaControlChar != nil)
+        guard readiness.hasCommandCharacteristic, readiness.hasControlCharacteristic else {
+            failConnect(SignalLightSessionError.notReady)
+            return
+        }
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: (any Error)?
+    ) {
+        guard characteristic.uuid == Self.otaControlCharacteristicUUID else { return }
+        if let error {
+            failConnect(SignalLightSessionError.connectFailed(error.localizedDescription))
+            return
+        }
+
+        readiness.didEnableControlNotifications(characteristic.isNotifying)
+        guard readiness.isReady else {
             failConnect(SignalLightSessionError.notReady)
             return
         }
