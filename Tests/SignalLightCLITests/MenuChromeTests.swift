@@ -65,6 +65,24 @@ struct MenuChromeTests {
         #expect(emitted == ["\u{1B}[2J\u{1B}[H"])
     }
 
+    @Test("Command pages keep the menu frame during progress")
+    func menuCommandFrame() {
+        let lines = MenuActionScreen.lines(
+            terminal: plain,
+            trail: ["设备管理", "固件更新"],
+            body: ["正在连接信号灯…"],
+            footer: "Esc 取消"
+        )
+
+        #expect(lines == [
+            "信号灯 › 设备管理 › 固件更新",
+            "",
+            "正在连接信号灯…",
+            "",
+            "Esc 取消",
+        ])
+    }
+
     @Test("The header's hooks segment names the hooked agents, or 未接入")
     func hooksSegmentWording() {
         #expect(StatusSnapshot.menuHooksDescription(for: []) == "未接入")

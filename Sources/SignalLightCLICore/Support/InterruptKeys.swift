@@ -1,13 +1,17 @@
 import Darwin
 import Foundation
 
-/// What the just-read interrupt key was. Only Ctrl-C is singled out; the
-/// rest (Ctrl-D, q/Q, a lone Esc) are read — so they don't echo as `^[`
-/// junk at a prompt — and left to the caller to answer: the flashing waits
-/// ignore them, the pairing scan stops on any of them.
-enum InterruptKey {
+/// What the just-read interrupt key was. Ctrl-C and a lone Esc are distinct
+/// cancellation keys; other keys are consumed so they cannot leak into a
+/// later prompt.
+enum InterruptKey: Equatable {
     case ctrlC
+    case escape
     case other
+
+    var isCancellation: Bool {
+        self == .ctrlC || self == .escape
+    }
 }
 
 /// Blocks until an interrupt key arrives; other keystrokes are ignored, and
@@ -30,7 +34,7 @@ func waitForInterruptKey() async throws -> InterruptKey {
         case 0x04, 0x71, 0x51:  // Ctrl-D, q, Q
             return .other
         case 0x1B:  // Esc, or the lead byte of an arrow key
-            if case .lone = RawMode.classifyEscape() { return .other }
+            if case .lone = RawMode.classifyEscape() { return .escape }
         default:
             continue
         }

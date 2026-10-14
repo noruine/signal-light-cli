@@ -120,13 +120,21 @@ struct Calibrate: AsyncParsableCommand {
     /// just add noise. Enter / Space / n mean "nothing lit"; Esc (or Ctrl-C)
     /// cancels the whole calibration and records nothing.
     private func promptObservation() -> SignalLightWizardObservation? {
-        FileHandle.standardError.write(Data("看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮（Esc 取消）：".utf8))
+        let prompt = "看到什么颜色？按 r 红 / y 黄 / g 绿 / n 未亮（Esc 取消）："
+        MenuActionScreen.setFooter("r 红 · y 黄 · g 绿 · n 未亮 · Esc 取消")
+        if !MenuActionScreen.append(prompt) {
+            FileHandle.standardError.write(Data(prompt.utf8))
+        }
 
         // A key held from the device round-trip must not answer this pin.
         RawMode.discardPendingInput()
         guard let original = RawMode.enter() else {
             let line = readLine(strippingNewline: true)?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-            FileHandle.standardError.write(Data("\n".utf8))
+            if MenuActionScreen.isActive() {
+                MenuActionScreen.setFooter("正在处理…")
+            } else {
+                FileHandle.standardError.write(Data("\n".utf8))
+            }
             switch line {
             case "r": return .red
             case "y": return .yellow
@@ -136,7 +144,11 @@ struct Calibrate: AsyncParsableCommand {
         }
         defer {
             RawMode.restore(original)
-            FileHandle.standardError.write(Data("\n".utf8))
+            if MenuActionScreen.isActive() {
+                MenuActionScreen.setFooter("正在处理…")
+            } else {
+                FileHandle.standardError.write(Data("\n".utf8))
+            }
         }
 
         while true {

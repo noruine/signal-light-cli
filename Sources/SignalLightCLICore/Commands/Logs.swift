@@ -32,10 +32,10 @@ struct Logs: AsyncParsableCommand {
         }
 
         terminal.progress("\(terminal.emoji(CLIGlyph.logs))\(displayPath(paths.logURL))（末尾 \(lines) 行）")
-        try printTail(of: paths.logURL, lineCount: lines)
+        try printTail(of: paths.logURL, lineCount: lines, terminal: terminal)
 
         guard follow else { return }
-        try await followFile(paths.logURL)
+        try await followFile(paths.logURL, terminal: terminal)
     }
 
     /// Abbreviates against the home `SignalLightDaemonPaths` resolves (which
@@ -45,7 +45,7 @@ struct Logs: AsyncParsableCommand {
         return url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path
     }
 
-    private func printTail(of url: URL, lineCount: Int) throws {
+    private func printTail(of url: URL, lineCount: Int, terminal: Terminal) throws {
         let content = try String(contentsOf: url, encoding: .utf8)
         var allLines = content.split(separator: "\n", omittingEmptySubsequences: false)
         // A file ending in "\n" (every file this CLI writes) splits into a
@@ -54,12 +54,13 @@ struct Logs: AsyncParsableCommand {
         if allLines.last?.isEmpty == true {
             allLines.removeLast()
         }
-        for line in allLines.suffix(lineCount) {
-            print(line)
+        let tail = allLines.suffix(lineCount).joined(separator: "\n")
+        if !tail.isEmpty {
+            terminal.out(tail)
         }
     }
 
-    private func followFile(_ url: URL) async throws {
+    private func followFile(_ url: URL, terminal: Terminal) async throws {
         var lastSignature = fileSignature(url)
 
         while true {
@@ -76,19 +77,23 @@ struct Logs: AsyncParsableCommand {
             // offset as an append.
             let wasRewritten = signature.size < lastSignature.size
                 || (signature.size == lastSignature.size && signature.modified != lastSignature.modified)
-            appendNewContent(of: url, from: wasRewritten ? 0 : lastSignature.size)
+            appendNewContent(of: url, from: wasRewritten ? 0 : lastSignature.size, terminal: terminal)
             lastSignature = signature
         }
     }
 
-    private func appendNewContent(of url: URL, from offset: UInt64) {
+    private func appendNewContent(of url: URL, from offset: UInt64, terminal: Terminal) {
         guard let handle = FileHandle(forReadingAtPath: url.path) else { return }
         defer { try? handle.close() }
 
         handle.seek(toFileOffset: offset)
         let newData = handle.readDataToEndOfFile()
         if let text = String(data: newData, encoding: .utf8) {
-            print(text, terminator: "")
+            if CLIRuntimeContext.isMenuSession {
+                terminal.out(text.trimmingCharacters(in: .newlines))
+            } else {
+                print(text, terminator: "")
+            }
         }
     }
 

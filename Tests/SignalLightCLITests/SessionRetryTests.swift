@@ -31,6 +31,13 @@ struct SessionRetryTests {
         #expect(!readiness.isReady)
     }
 
+    @Test("Firmware cancellation recognizes Esc as well as Ctrl-C")
+    func cancellationKeys() {
+        #expect(InterruptKey.escape.isCancellation)
+        #expect(InterruptKey.ctrlC.isCancellation)
+        #expect(!InterruptKey.other.isCancellation)
+    }
+
     @Test("Transient establishment failures retry, state problems do not")
     func retryableSet() {
         #expect(SignalLightSessionError.connectFailed("busy").isRetryable)

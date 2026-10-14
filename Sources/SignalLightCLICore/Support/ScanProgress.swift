@@ -76,6 +76,11 @@ final class ScanProgress: @unchecked Sendable {
         queue.sync { [self] in
             timer?.cancel()
             timer = nil
+            if MenuActionScreen.isActive() {
+                MenuActionScreen.finishProgress()
+                frameStarted = false
+                return
+            }
             guard animated, frameStarted else { return }
             frameStarted = false
             // Clear the body line, the blank, and the bar — then put the
@@ -101,6 +106,11 @@ final class ScanProgress: @unchecked Sendable {
     private func drawFrameIfNeeded() {
         guard !frameStarted else { return }
         frameStarted = true
+        if MenuActionScreen.isActive() {
+            MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
+            _ = MenuActionScreen.replaceProgress("正在扫描红绿灯设备…")
+            return
+        }
         let lines = ScreenLayout.lines(
             terminal: terminal,
             trail: nil,
@@ -139,10 +149,23 @@ final class ScanProgress: @unchecked Sendable {
         case .none:
             return
         }
+        if MenuActionScreen.isActive() {
+            MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
+            _ = MenuActionScreen.replaceProgress(message)
+            return
+        }
         writeLine("\r\u{1B}[K\(message)")
     }
 
     private func writeLine(_ text: String) {
+        if MenuActionScreen.isActive() {
+            let message = text
+                .replacingOccurrences(of: "\r\u{1B}[K", with: "")
+                .trimmingCharacters(in: .newlines)
+            MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
+            _ = MenuActionScreen.replaceProgress(message)
+            return
+        }
         FileHandle.standardError.write(Data(text.utf8))
     }
 }

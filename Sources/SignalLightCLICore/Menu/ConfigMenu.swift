@@ -145,6 +145,7 @@ enum ConfigMenu {
         guard Confirm.promptYesNo(terminal, "先试试这个效果？", defaultAnswer: false) else { return }
         ScreenLayout.beginStep()
 
+        MenuActionScreen.begin(terminal: terminal, trail: CLIRuntimeContext.menuTrail)
         let control = LaunchAgentControl(paths: paths)
         do {
             try await DaemonPause.run(terminal: terminal, control: control) {

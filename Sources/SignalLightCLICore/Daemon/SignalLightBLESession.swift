@@ -22,6 +22,23 @@ enum SignalLightSessionError: Error, CustomStringConvertible {
     }
 }
 
+private final class BLECancellationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+    }
+}
+
 extension SignalLightSessionError {
     /// Establishment failures deserve another attempt: the firmware frees
     /// its single connection slot a beat after the daemon lets go, and the
@@ -89,6 +106,11 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     private var connectContinuation: CheckedContinuation<Void, Error>?
     private var scanTimeout: DispatchWorkItem?
 
+    private struct PendingWrite {
+        let continuation: CheckedContinuation<Void, Error>
+        let timeout: DispatchWorkItem
+    }
+
     /// Notifications on the OTA-control characteristic arriving before anyone
     /// is awaiting them (the firmware can push `CONFIG:`/OTA status between
     /// our `await`s). Buffered so `awaitNotification` never misses one.
@@ -97,8 +119,9 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
 
     /// At most one outstanding write per characteristic, since every caller
     /// awaits its write's ack before issuing the next.
-    private var pendingWrites: [CBUUID: CheckedContinuation<Void, Error>] = [:]
+    private var pendingWrites: [CBUUID: PendingWrite] = [:]
     private var pendingInfoRead: CheckedContinuation<String, Error>?
+    private var pendingInfoReadTimeout: DispatchWorkItem?
     private var readiness = BLESessionReadiness()
 
     init(pairedDeviceID: UUID) {
@@ -144,13 +167,26 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     }
 
     private func connectOnce(timeout: TimeInterval) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async { [self] in
-                connectContinuation = continuation
-                central = CBCentralManager(delegate: self, queue: queue)
-                scanTimeout = scheduleTimeout(after: timeout) { [weak self] in
-                    self?.failConnect(SignalLightSessionError.timedOut("连接设备"))
+        let cancellation = BLECancellationFlag()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                queue.async { [self] in
+                    guard !cancellation.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    connectContinuation = continuation
+                    central = CBCentralManager(delegate: self, queue: queue)
+                    scanTimeout = scheduleTimeout(after: timeout) { [weak self] in
+                        self?.failConnect(SignalLightSessionError.timedOut("连接设备"))
+                    }
                 }
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                self?.failConnect(CancellationError())
             }
         }
     }
@@ -181,21 +217,37 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
 
     /// Reads the INFO characteristic (firmware version / hardware id).
     func readInfo(timeout: TimeInterval = 5) async throws -> String {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-            queue.async { [self] in
-                guard let peripheral, let infoChar else {
-                    continuation.resume(throwing: SignalLightSessionError.notReady)
-                    return
+        let cancellation = BLECancellationFlag()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                queue.async { [self] in
+                    guard !cancellation.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    guard let peripheral, let infoChar else {
+                        continuation.resume(throwing: SignalLightSessionError.notReady)
+                        return
+                    }
+                    pendingInfoRead = continuation
+                    peripheral.readValue(for: infoChar)
+                    pendingInfoReadTimeout = scheduleTimeout(after: timeout) { [weak self] in
+                        guard let self, let pending = self.pendingInfoRead else { return }
+                        self.pendingInfoRead = nil
+                        self.pendingInfoReadTimeout = nil
+                        pending.resume(throwing: SignalLightSessionError.timedOut("读取设备信息"))
+                    }
                 }
-                pendingInfoRead = continuation
-                peripheral.readValue(for: infoChar)
-                // A dropped read would otherwise hang forever; bound it.
-                let work = scheduleTimeout(after: timeout) { [weak self] in
-                    guard let self, let pending = self.pendingInfoRead else { return }
-                    self.pendingInfoRead = nil
-                    pending.resume(throwing: SignalLightSessionError.timedOut("读取设备信息"))
-                }
-                _ = work
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                guard let self, let pending = self.pendingInfoRead else { return }
+                self.pendingInfoRead = nil
+                self.pendingInfoReadTimeout?.cancel()
+                self.pendingInfoReadTimeout = nil
+                pending.resume(throwing: CancellationError())
             }
         }
     }
@@ -204,19 +256,35 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     /// `prefix` (or any notification when `prefix` is nil), draining the
     /// buffer first so an early-arriving reply is never lost.
     func awaitNotification(prefix: String?, timeout: TimeInterval) async throws -> String {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-            queue.async { [self] in
-                if let index = notificationBuffer.firstIndex(where: { prefix == nil || $0.hasPrefix(prefix!) }) {
-                    let text = notificationBuffer.remove(at: index)
-                    continuation.resume(returning: text)
-                    return
+        let cancellation = BLECancellationFlag()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                queue.async { [self] in
+                    guard !cancellation.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    if let index = notificationBuffer.firstIndex(where: { prefix == nil || $0.hasPrefix(prefix!) }) {
+                        let text = notificationBuffer.remove(at: index)
+                        continuation.resume(returning: text)
+                        return
+                    }
+                    let work = scheduleTimeout(after: timeout) { [weak self] in
+                        guard let self, let pending = self.pendingNotification else { return }
+                        self.pendingNotification = nil
+                        pending.continuation.resume(throwing: SignalLightSessionError.timedOut("设备响应"))
+                    }
+                    pendingNotification = (prefix, continuation, work)
                 }
-                let work = scheduleTimeout(after: timeout) { [weak self] in
-                    guard let self, let pending = self.pendingNotification else { return }
-                    self.pendingNotification = nil
-                    pending.continuation.resume(throwing: SignalLightSessionError.timedOut("设备响应"))
-                }
-                pendingNotification = (prefix, continuation, work)
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                guard let self, let pending = self.pendingNotification else { return }
+                self.pendingNotification = nil
+                pending.timeout.cancel()
+                pending.continuation.resume(throwing: CancellationError())
             }
         }
     }
@@ -235,14 +303,33 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     // MARK: - Internal write plumbing
 
     private func write(_ data: Data, characteristic uuid: CBUUID) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async { [self] in
-                guard let peripheral, let characteristic = characteristic(for: uuid) else {
-                    continuation.resume(throwing: SignalLightSessionError.notReady)
-                    return
+        let cancellation = BLECancellationFlag()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                queue.async { [self] in
+                    guard !cancellation.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    guard let peripheral, let characteristic = characteristic(for: uuid) else {
+                        continuation.resume(throwing: SignalLightSessionError.notReady)
+                        return
+                    }
+                    let timeout = scheduleTimeout(after: 10) { [weak self] in
+                        guard let pending = self?.pendingWrites.removeValue(forKey: uuid) else { return }
+                        pending.continuation.resume(throwing: SignalLightSessionError.timedOut("写入设备"))
+                    }
+                    pendingWrites[uuid] = PendingWrite(continuation: continuation, timeout: timeout)
+                    peripheral.writeValue(data, for: characteristic, type: .withResponse)
                 }
-                pendingWrites[uuid] = continuation
-                peripheral.writeValue(data, for: characteristic, type: .withResponse)
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                guard let self, let pending = self.pendingWrites.removeValue(forKey: uuid) else { return }
+                pending.timeout.cancel()
+                pending.continuation.resume(throwing: CancellationError())
             }
         }
     }
@@ -344,12 +431,15 @@ extension SignalLightBLESession: CBCentralManagerDelegate {
             pending.timeout.cancel()
             pending.continuation.resume(throwing: dropped)
         }
-        for (_, continuation) in pendingWrites {
-            continuation.resume(throwing: dropped)
+        for pending in pendingWrites.values {
+            pending.timeout.cancel()
+            pending.continuation.resume(throwing: dropped)
         }
         pendingWrites.removeAll()
         if let pending = pendingInfoRead {
             pendingInfoRead = nil
+            pendingInfoReadTimeout?.cancel()
+            pendingInfoReadTimeout = nil
             pending.resume(throwing: dropped)
         }
     }
@@ -425,11 +515,12 @@ extension SignalLightBLESession: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?) {
-        guard let continuation = pendingWrites.removeValue(forKey: characteristic.uuid) else { return }
+        guard let pending = pendingWrites.removeValue(forKey: characteristic.uuid) else { return }
+        pending.timeout.cancel()
         if let error {
-            continuation.resume(throwing: error)
+            pending.continuation.resume(throwing: error)
         } else {
-            continuation.resume()
+            pending.continuation.resume()
         }
     }
 
@@ -442,6 +533,8 @@ extension SignalLightBLESession: CBPeripheralDelegate {
         if characteristic.uuid == Self.infoCharacteristicUUID {
             guard let pending = pendingInfoRead else { return }
             pendingInfoRead = nil
+            pendingInfoReadTimeout?.cancel()
+            pendingInfoReadTimeout = nil
             pending.resume(returning: trimmed)
             return
         }

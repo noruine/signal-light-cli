@@ -153,7 +153,10 @@ enum MenuPrompt {
     /// "captured" the keyboard. Falls back to a line read when stdin isn't a
     /// TTY.
     static func pause(_ terminal: Terminal, message: String? = nil) {
-        FileHandle.standardError.write(Data(("\n" + terminal.dimmed(message ?? terminal.keyBar([.enter("继续"), .escape("返回")]))).utf8))
+        let pageAlreadyHasFooter = MenuActionScreen.finishForPause(terminal: terminal, message: message)
+        if !pageAlreadyHasFooter {
+            FileHandle.standardError.write(Data(("\n" + terminal.dimmed(message ?? terminal.keyBar([.enter("继续"), .escape("返回")]))).utf8))
+        }
 
         // A key mashed while the action ran must not answer the pause.
         RawMode.discardPendingInput()
@@ -312,16 +315,22 @@ enum MenuLoop {
             // Exit before pausing so the final output (e.g. uninstall's
             // summary) stays on screen and the program ends cleanly, with no
             // pointless "press Enter" on the way out.
-            if item.shouldExitAfter() { return }
+            if item.shouldExitAfter() {
+                MenuActionScreen.finishWithoutPause(footer: "已完成")
+                CLIRuntimeContext.menuTrail = []
+                return
+            }
             let ending = CLIRuntimeContext.consumeCommandEnding()
             if item.pausesAfter {
                 switch ending {
                 case .announcedCancel:
+                    MenuActionScreen.finishWithoutPause()
                     // The cancel line needs a beat on screen before the
                     // redraw wipes it, or it reads as a flicker of
                     // unexplained text.
                     try? await Task.sleep(for: .milliseconds(700))
                 case .silentCancel:
+                    MenuActionScreen.discard()
                     break  // the answer to the question was the statement
                 case .completed:
                     MenuPrompt.pause(terminal)
@@ -330,6 +339,8 @@ enum MenuLoop {
                     // this item.
                     RawMode.discardPendingInput()
                 }
+            } else {
+                MenuActionScreen.discard()
             }
         }
     }
@@ -342,6 +353,7 @@ enum MenuLoop {
 enum MenuCommandRunner {
     @discardableResult
     static func run(_ arguments: [String], terminal: Terminal) async -> Bool {
+        MenuActionScreen.begin(terminal: terminal, trail: CLIRuntimeContext.menuTrail)
         do {
             var command = try SignalLightCLI.parseAsRoot(arguments)
             if var asyncCommand = command as? AsyncParsableCommand {

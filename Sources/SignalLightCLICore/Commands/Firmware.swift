@@ -78,15 +78,29 @@ struct Firmware: AsyncParsableCommand {
 
         private func runUpdate(terminal: Terminal, deviceID: UUID) async throws {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
+            MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
             terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
-            try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
+            do {
+                try await runWhileListeningForCancel(terminal: terminal) {
+                    try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
+                }
+            } catch UserCancellation.cancelled {
+                CancelNotice.say("已取消固件更新。", terminal: terminal)
+                return
+            }
             defer { session.disconnect() }
 
             guard session.hasOTACharacteristics else {
                 throw CLIError("这盏灯不支持 OTA（缺少升级用的蓝牙特征）。", exitCode: .unavailable)
             }
 
-            let firmware = try await resolveFirmwareFile(session: session, terminal: terminal)
+            let firmware: (url: URL, isDownloaded: Bool)?
+            do {
+                firmware = try await resolveFirmwareFile(session: session, terminal: terminal)
+            } catch UserCancellation.cancelled {
+                CancelNotice.say("已取消固件更新。", terminal: terminal)
+                return
+            }
             guard let firmware else {
                 // Nothing to flash: either already latest (the version line
                 // above is the whole answer) or the user cancelled, which was
@@ -127,11 +141,16 @@ struct Firmware: AsyncParsableCommand {
                 return (URL(fileURLWithPath: (file as NSString).expandingTildeInPath), isDownloaded: false)
             }
 
-            let info = SignalLightDeviceInfo.parse(try await session.readInfo())
-            let availability = try await FirmwareUpdateChecker().check(
-                hardware: info.hardware,
-                currentVersion: info.version
-            )
+            let infoText = try await runWhileListeningForCancel(terminal: terminal) {
+                try await session.readInfo()
+            }
+            let info = SignalLightDeviceInfo.parse(infoText)
+            let availability = try await runWhileListeningForCancel(terminal: terminal) {
+                try await FirmwareUpdateChecker().check(
+                    hardware: info.hardware,
+                    currentVersion: info.version
+                )
+            }
             FirmwareSupport.printCheckResult(availability, terminal: terminal)
             guard case .updateAvailable = availability else {
                 return nil
@@ -141,7 +160,8 @@ struct Firmware: AsyncParsableCommand {
                 CLIRuntimeContext.markCommandCancelled(.silentCancel)
                 return nil
             }
-            terminal.progress("\(terminal.emoji(CLIGlyph.firmware))正在下载固件（\(info.hardware)，最长约 1 分钟，按 Ctrl-C 取消）…")
+            MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
+            terminal.progress("\(terminal.emoji(CLIGlyph.firmware))正在下载固件（\(info.hardware)，最长约 1 分钟，按 Esc 或 Ctrl-C 取消）…")
             do {
                 let downloaded = try await runWhileListeningForCancel(terminal: terminal) {
                     try await FirmwareUpdateChecker().downloadLatest(hardware: info.hardware)
@@ -158,6 +178,7 @@ struct Firmware: AsyncParsableCommand {
                 // Sending the image is cancellable: the firmware discards the
                 // staged image on OTA_ABORT and keeps running what it has.
                 try await runWhileListeningForCancel(terminal: terminal) {
+                    MenuActionScreen.setFooter(terminal.keyBar([.escape("取消")]))
                     terminal.progress("正在启动升级会话…")
                     try await session.sendControl("OTA_BEGIN:\(data.count)")
                     let begin = try await session.awaitNotification(prefix: "OTA_BEGIN", timeout: 10)
@@ -168,7 +189,7 @@ struct Firmware: AsyncParsableCommand {
                     let chunkSize = session.maxWriteChunkSize
                     var offset = 0
                     while offset < data.count {
-                        // Ctrl-C lands here, between chunks.
+                        // Cancellation lands here, between chunks.
                         try Task.checkCancellation()
                         let end = min(offset + chunkSize, data.count)
                         try await session.sendData(data.subdata(in: offset..<end))
@@ -179,11 +200,12 @@ struct Firmware: AsyncParsableCommand {
                 }
 
                 // Committing is not cancellable: the device already has the
-                // image and is verifying it, so Ctrl-C only gets a note.
+                // image and is verifying it, so Esc and Ctrl-C only get a note.
                 try await runWhileAnsweringInterruptKeys(
                     terminal: terminal,
                     note: "正在提交，不能中断；即将完成。"
                 ) {
+                    MenuActionScreen.setFooter("设备正在提交，暂不能取消")
                     terminal.progress("正在校验并提交…")
                     try await session.sendControl("OTA_END")
                     let endResp = try await session.awaitNotification(prefix: "OTA_END", timeout: 20)
@@ -218,12 +240,17 @@ struct Firmware: AsyncParsableCommand {
             let barWidth = 24
             let filled = total > 0 ? Int(Double(barWidth) * Double(sent) / Double(total)) : barWidth
             let bar = String(repeating: "=", count: filled) + String(repeating: " ", count: barWidth - filled)
-            FileHandle.standardError.write(Data("\r进度 [\(bar)] \(percent)% (\(sent)/\(total))".utf8))
+            let progress = "进度 [\(bar)] \(percent)% (\(sent)/\(total))"
+            if !MenuActionScreen.replaceProgress(progress) {
+                FileHandle.standardError.write(Data("\r\(progress)".utf8))
+            }
         }
 
         private static func finishProgressLine(terminal: Terminal) {
             guard terminal.isInteractive, !terminal.quiet else { return }
-            FileHandle.standardError.write(Data("\n".utf8))
+            if !MenuActionScreen.isActive() {
+                FileHandle.standardError.write(Data("\n".utf8))
+            }
         }
     }
 }
@@ -288,14 +315,14 @@ enum FirmwareSupport {
     }
 }
 
-/// Thrown when the user presses Ctrl-C through one of the firmware waits; the
+/// Thrown when the user presses Esc or Ctrl-C during a cancellable wait; the
 /// caller decides what stopping means (abandon the download, or abort the OTA
 /// session).
 private enum UserCancellation: Error {
     case cancelled
 }
 
-/// Runs `body` while watching for Ctrl-C, so a network wait can be abandoned
+/// Runs `body` while watching for Esc or Ctrl-C, so a network wait can be abandoned
 /// from the terminal itself.
 ///
 /// The key is read rather than left to the terminal's SIGINT: inside terminal
@@ -359,7 +386,7 @@ private func runWhileAnsweringInterruptKeys<T: Sendable>(
                     continue
                 }
                 lastNoteAt = now
-                FileHandle.standardError.write(Data("\r\(note)\n".utf8))
+                terminal.progress(note)
             }
         }
         defer { group.cancelAll() }
@@ -370,11 +397,8 @@ private func runWhileAnsweringInterruptKeys<T: Sendable>(
     }
 }
 
-/// Returns only to mean "the user pressed Ctrl-C". Ctrl-C is the terminal's
-/// own interrupt, the one key a stuck program is expected to answer, and
-/// what the flashing waits advertise: Esc stops nothing here, where an
-/// abandoned write could leave the device mid-update. (The pairing scan,
-/// where stopping costs nothing, answers Esc as well — see `PairFlow`.)
+/// Returns only when the user presses Esc or Ctrl-C. During OTA transfer the
+/// firmware can discard a partial image, so both keys can stop it safely.
 /// A non-TTY, EOF or a cancelled task never counts as a stop: `body` stays
 /// the only other way out.
 private func waitForCancelKey() async throws {
@@ -386,8 +410,6 @@ private func waitForCancelKey() async throws {
     defer { RawMode.restore(original) }
 
     while true {
-        if try await waitForInterruptKey() == .ctrlC {
-            return
-        }
+        if try await waitForInterruptKey().isCancellation { return }
     }
 }
