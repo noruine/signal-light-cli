@@ -41,8 +41,8 @@ struct MenuChromeTests {
     @Test("The header's hooks segment names the hooked agents, or 未接入")
     func hooksSegmentWording() {
         #expect(StatusSnapshot.menuHooksDescription(for: []) == "未接入")
-        #expect(StatusSnapshot.menuHooksDescription(for: ["codex"]) == "codex")
-        #expect(StatusSnapshot.menuHooksDescription(for: ["claude", "codex"]) == "claude + codex")
+        #expect(StatusSnapshot.menuHooksDescription(for: ["Codex"]) == "Codex")
+        #expect(StatusSnapshot.menuHooksDescription(for: ["Claude Code", "Codex"]) == "Claude Code + Codex")
     }
 
     @Test("The breadcrumb reads root, then the trail")

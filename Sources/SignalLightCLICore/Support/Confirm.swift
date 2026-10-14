@@ -14,7 +14,8 @@ public enum Confirm {
     /// above). Renders in place (no screen clear) so preceding output — a
     /// calibration result, an uninstall summary — stays visible to inform
     /// the choice. `defaultAnswer` sets which side starts highlighted; Esc
-    /// returns it. Falls back to a typed y/n prompt when stdin isn't a TTY.
+    /// (like Ctrl-C/Ctrl-D/q, and as the key bar says) always cancels.
+    /// Falls back to a typed y/n prompt when stdin isn't a TTY.
     public static func promptYesNo(_ terminal: Terminal, _ question: String, defaultAnswer: Bool = false) -> Bool {
         guard let original = RawMode.enter() else {
             return typedFallback(terminal, question, defaultAnswer: defaultAnswer)
@@ -51,7 +52,10 @@ public enum Confirm {
                 return yes
             case .cancel:
                 writeStderr("\n")
-                return defaultAnswer
+                // Esc / Ctrl-C / Ctrl-D / q always back out, whatever the
+                // default side was: the key bar promises "Esc 取消", so a
+                // default-yes question must not read Esc as yes.
+                return false
             case .ignore:
                 break
             }

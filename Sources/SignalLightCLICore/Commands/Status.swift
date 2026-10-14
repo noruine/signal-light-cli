@@ -45,8 +45,9 @@ struct StatusSnapshot {
     /// the paired name.
     let deviceName: String?
 
-    /// CLI ids (`claude` / `codex`) of the agents whose hooks are installed —
-    /// the fact that decides whether the light follows a session at all.
+    /// Display names (`Claude Code` / `Codex`) of the agents whose hooks are
+    /// installed — the fact that decides whether the light follows a session
+    /// at all.
     let hookedAgents: [String]
 
     /// Whether the service's process is actually alive. `isLoaded` alone can't
@@ -69,7 +70,7 @@ struct StatusSnapshot {
         let deviceName = stateIsLive ? (state?.deviceName ?? pairedDeviceName) : pairedDeviceName
         let hookedAgents = HookAgent.allCases
             .filter { (try? HooksAgentSupport.status($0, paths: paths))?.managedHooksPresent ?? false }
-            .map(\.rawValue)
+            .map(\.displayName)
 
         return StatusSnapshot(
             paths: paths,
@@ -134,12 +135,12 @@ struct StatusSnapshot {
         // whether the light will react at all (service, agent hooks), then
         // the light's own face (link, what it is showing).
         var setup = ["服务 \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)"]
-        setup.append("hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
+        setup.append("Hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
         var lines = ["    " + setup.joined(separator: "   ")]
         if stateIsLive {
             let light = [
                 "蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)",
-                "当前 \(menuBucketDescription)",
+                "当前状态 \(menuBucketDescription)",
             ]
             lines.append("    " + light.joined(separator: "   "))
         }
@@ -185,9 +186,9 @@ struct StatusSnapshot {
         return "\(SignalLightBucketDisplay.emoji(bucket))\(SignalLightBucketDisplay.name(bucket))"
     }
 
-    /// `codex`, `claude + codex`, or `未接入` — which agents' hooks are in,
-    /// so a menu that looks healthy can't hide "no session will ever light
-    /// it".
+    /// `Codex`, `Claude Code + Codex`, or `未接入` — which agents' hooks are
+    /// in, so a menu that looks healthy can't hide "no session will ever
+    /// light it".
     private var menuHooksDescription: String {
         Self.menuHooksDescription(for: hookedAgents)
     }
