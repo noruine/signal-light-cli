@@ -75,11 +75,13 @@ struct FirmwareUpdateChecker {
         let binaryName = manifest.binary ?? Self.fallbackBinaryName
         let data = try await fetchWithRetry(url: Self.binaryURL(hardware: hardware, binary: binaryName), timeout: 20)
 
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("signal-light-firmware-\(manifest.version).bin")
-        try? FileManager.default.removeItem(at: destination)
+        let destination = Self.temporaryFirmwareURL()
         try data.write(to: destination)
         return (destination, manifest.version)
+    }
+
+    static func temporaryFirmwareURL(in directory: URL = FileManager.default.temporaryDirectory) -> URL {
+        directory.appendingPathComponent("signal-light-firmware-\(UUID().uuidString).bin")
     }
 
     private func fetchManifest(hardware: String) async throws -> FirmwareManifest {
