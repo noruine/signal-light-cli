@@ -31,14 +31,14 @@
 
 | Agent hook | 归一化事件 | 说明 |
 | --- | --- | --- |
-| Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；`source` 为 `compact` 时忽略，不重置当前状态。 |
+| Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；signal-light 的 matcher 不处理 `compact`，映射层也会忽略该原因。 |
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
 | Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为运行中。 |
 | Claude `Stop` / `StopFailure` | `Stop` / `StopFailure` | 当前轮次结束。 |
 | Claude `SessionEnd` | `SessionEnd` | 移除会话。 |
-| Codex `SessionStart`（startup、resume、clear） | `SessionStart` | 初始化、恢复或清空会话时触发。 |
+| Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；`compact` 不匹配。 |
 | Codex `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
 | Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为运行中。 |
@@ -84,7 +84,7 @@ Claude Code 安装 `SessionStart`、`UserPromptSubmit`、`PreToolUse`（仅匹�
 `AskUserQuestion`）、`PermissionRequest`、`PostToolUse`、`PostToolUseFailure`、`Stop`、
 `StopFailure` 和 `SessionEnd`。
 
-Codex 安装 `SessionStart`（startup、resume、clear）、`UserPromptSubmit`、
+Codex 安装 `SessionStart`（startup、resume、clear、fork）、`UserPromptSubmit`、
 `PermissionRequest`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。
 
 安装和卸载只修改 signal-light 自己写入的 hook。单次子进程可通过

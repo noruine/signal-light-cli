@@ -103,8 +103,8 @@ struct HookIsolationTests {
         #expect(!commands.contains(managedCommand))
     }
 
-    @Test("Codex compaction does not reset a running session")
-    func codexSessionStartMatcherExcludesCompaction() throws {
+    @Test("Codex session starts include fork and exclude compaction")
+    func codexSessionStartMatcher() throws {
         let installed = try CodexHookInstaller.installHooksJSON(
             existingData: nil,
             hookCommand: managedCommand
@@ -116,8 +116,24 @@ struct HookIsolationTests {
         let groups = try #require(hooks["SessionStart"] as? [[String: Any]])
         let matcher = try #require(groups.first?["matcher"] as? String)
 
-        #expect(matcher == "startup|resume|clear")
+        #expect(matcher == "startup|resume|clear|fork")
         #expect(!matcher.contains("compact"))
+    }
+
+    @Test("Claude session starts include fork and exclude compaction")
+    func claudeSessionStartMatcher() throws {
+        let installed = try ClaudeHookInstaller.installSettingsJSON(
+            existingData: nil,
+            hookCommand: managedCommand
+        )
+        let contents = try #require(installed.contents)
+        let object = try JSONSerialization.jsonObject(with: contents)
+        let root = try #require(object as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let groups = try #require(hooks["SessionStart"] as? [[String: Any]])
+        let matcher = try #require(groups.first?["matcher"] as? String)
+
+        #expect(matcher == "startup|resume|clear|fork")
     }
 
     @Test("Managed hooks observe answers and completed tools")

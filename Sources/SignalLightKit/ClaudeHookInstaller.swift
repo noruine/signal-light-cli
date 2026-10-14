@@ -48,7 +48,7 @@ public enum ClaudeHookInstaller {
     /// Tracks submitted prompts, approval requests, user questions, tool
     /// completion and turn/session endings for the signal light.
     private static let eventSpecs: [(name: String, matcher: String?, timeout: Int?)] = [
-        ("SessionStart", nil, nil),
+        ("SessionStart", "startup|resume|clear|fork", nil),
         ("UserPromptSubmit", nil, nil),
         ("PreToolUse", "AskUserQuestion", managedTimeout),
         ("PermissionRequest", "*", managedTimeout),

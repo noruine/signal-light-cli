@@ -81,7 +81,7 @@ public enum CodexHookInstaller {
     private static let eventSpecs: [(name: String, matcher: String?, timeout: Int?)] = [
         // `compact` fires mid-turn before Codex immediately continues. Treating
         // it as a new idle session would hide work until the turn ends.
-        ("SessionStart", "startup|resume|clear", managedTimeout),
+        ("SessionStart", "startup|resume|clear|fork", managedTimeout),
         ("UserPromptSubmit", nil, managedTimeout),
         ("PermissionRequest", nil, managedInteractiveTimeout),
         ("PostToolUse", nil, managedTimeout),
