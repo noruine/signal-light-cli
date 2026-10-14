@@ -7,6 +7,19 @@ import Foundation
 /// (EINVAL), and this socket only needs to be boring: one read, one ack,
 /// close.
 public enum UnixSocket {
+    /// Prevents a peer closing mid-write from terminating the process with
+    /// SIGPIPE. Call on both connected and accepted descriptors.
+    public static func suppressSIGPIPE(on descriptor: Int32) -> Bool {
+        var enabled: Int32 = 1
+        return setsockopt(
+            descriptor,
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &enabled,
+            socklen_t(MemoryLayout.size(ofValue: enabled))
+        ) == 0
+    }
+
     /// Socket paths live in a fixed-size array; a longer path is silently
     /// truncated by the kernel, so refuse it up front.
     public static func address(for path: String) -> sockaddr_un? {

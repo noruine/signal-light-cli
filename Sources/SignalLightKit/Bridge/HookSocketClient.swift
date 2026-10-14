@@ -18,6 +18,7 @@ public enum HookSocketClient {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }
         defer { close(fd) }
+        guard UnixSocket.suppressSIGPIPE(on: fd) else { return false }
 
         // Non-blocking connect plus a poll deadline: even a listener with a
         // full backlog can't stall the agent.

@@ -6,6 +6,33 @@ import Testing
 
 @Suite("Hook socket")
 struct HookSocketTests {
+    @Test("Socket descriptors disable SIGPIPE before writes")
+    func socketWritesCannotRaiseSIGPIPE() throws {
+        var descriptors: [Int32] = [-1, -1]
+        let result = descriptors.withUnsafeMutableBufferPointer {
+            socketpair(AF_UNIX, SOCK_STREAM, 0, $0.baseAddress)
+        }
+        #expect(result == 0)
+        defer {
+            close(descriptors[0])
+            close(descriptors[1])
+        }
+
+        #expect(UnixSocket.suppressSIGPIPE(on: descriptors[0]))
+
+        var enabled: Int32 = 0
+        var size = socklen_t(MemoryLayout.size(ofValue: enabled))
+        let optionResult = getsockopt(
+            descriptors[0],
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &enabled,
+            &size
+        )
+        #expect(optionResult == 0)
+        #expect(enabled == 1)
+    }
+
     @Test("An event reaches the registry over the socket and is acknowledged")
     func roundTrip() async throws {
         try await withSocketPath { socketURL in

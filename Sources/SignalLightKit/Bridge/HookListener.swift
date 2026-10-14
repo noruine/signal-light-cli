@@ -151,6 +151,7 @@ public actor HookListener {
         onStateChange: @escaping @Sendable (SessionRegistry.Summary) -> Void
     ) async {
         defer { close(fd) }
+        guard UnixSocket.suppressSIGPIPE(on: fd) else { return }
 
         guard let payload = readMessage(fd),
               let event = try? JSONDecoder().decode(HookEvent.self, from: payload) else {
