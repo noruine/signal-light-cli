@@ -86,19 +86,19 @@ struct SessionRegistryTests {
             group.addTask {
                 _ = await registry.apply(
                     event(.permissionRequest, session: "waiting"),
-                    onBucketChange: recorder.append
+                    onStateChange: recorder.append
                 )
             }
             group.addTask {
                 _ = await registry.apply(
                     event(.userPromptSubmit, session: "running"),
-                    onBucketChange: recorder.append
+                    onStateChange: recorder.append
                 )
             }
         }
 
         let currentBucket = await registry.bucket()
-        #expect(recorder.values.last == currentBucket)
+        #expect(recorder.values.last?.bucket == currentBucket)
         #expect(currentBucket == .needsApproval)
     }
 
@@ -130,6 +130,20 @@ struct SessionRegistryTests {
         #expect(await registry.bucket() == .running, "the Claude session is still running")
     }
 
+    @Test("Session summary reports each session and the winning phase")
+    func summaryReportsSessions() async {
+        let registry = SessionRegistry()
+        _ = await registry.apply(event(.userPromptSubmit, session: "work", source: .claude))
+        _ = await registry.apply(event(.permissionRequest, session: "question", source: .codex, question: true))
+
+        let summary = await registry.summary()
+        #expect(summary.bucket == .needsAnswer)
+        #expect(summary.sessions == [
+            SessionRegistry.SessionStatus(source: .claude, sessionID: "work", phase: .running),
+            SessionRegistry.SessionStatus(source: .codex, sessionID: "question", phase: .waitingForAnswer),
+        ])
+    }
+
     @Test("A running session that never ends goes idle after its lifetime")
     func runningSessionsExpire() async {
         let start = Date(timeIntervalSince1970: 1_000_000)
@@ -151,9 +165,9 @@ struct SessionRegistryTests {
         _ = await registry.apply(event(.userPromptSubmit))
 
         clock.advance(by: 3 * 60 * 60)
-        await registry.refresh(onBucketChange: recorder.append)
+        await registry.refresh(onStateChange: recorder.append)
 
-        #expect(recorder.values == [.idle])
+        #expect(recorder.values.map(\.bucket) == [.idle])
     }
 
     @Test("A payload version the daemon does not know is dropped")
@@ -167,18 +181,18 @@ struct SessionRegistryTests {
 
 private final class BucketRecorder: @unchecked Sendable {
     private let lock = NSLock()
-    private var recorded: [SignalLightBucket] = []
+    private var recorded: [SessionRegistry.Summary] = []
 
-    var values: [SignalLightBucket] {
+    var values: [SessionRegistry.Summary] {
         lock.lock()
         defer { lock.unlock() }
         return recorded
     }
 
-    func append(_ bucket: SignalLightBucket) {
+    func append(_ summary: SessionRegistry.Summary) {
         lock.lock()
         defer { lock.unlock() }
-        recorded.append(bucket)
+        recorded.append(summary)
     }
 }
 

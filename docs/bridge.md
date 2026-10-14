@@ -31,7 +31,7 @@
 
 | Agent hook | 归一化事件 | 说明 |
 | --- | --- | --- |
-| Claude `SessionStart` | `SessionStart` | 开始或恢复会话。当前未按启动原因筛选；包括 `compact` 在内的每次触发都会把会话设为空闲。 |
+| Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；`source` 为 `compact` 时忽略，不重置当前状态。 |
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
@@ -46,7 +46,7 @@
 | Codex `SessionEnd` | `SessionEnd` | 移除会话。 |
 
 Claude 子代理事件会忽略，避免把同一工作重复计入。Codex.app 没有 transcript 的内部事件也会忽略。
-Codex 的 `compact` 不作为新会话处理；压缩后可能继续当前轮次。
+Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能继续当前轮次。
 
 ## 会话状态与灯光汇总
 
@@ -62,7 +62,8 @@ Codex 的 `compact` 不作为新会话处理；压缩后可能继续当前轮次
 | `SessionEnd` | 移除会话 |
 
 一盏灯无法分别显示多个会话，因此守护进程会汇总所有会话，只显示优先级最高的一种状态：
-**等待审批 > 等待回答 > 运行中 > 空闲**。空闲会话不影响其他会话。
+**等待审批 > 等待回答 > 运行中 > 空闲**。空闲会话不影响其他会话。`signal-light status`
+和交互模式的状态页会分别列出各状态的会话数，并标明决定灯态的会话；同一优先级有多个会话时会全部列出。
 
 | 会话 A | 会话 B | 灯显示 |
 | --- | --- | --- |
@@ -75,7 +76,7 @@ Codex 的 `compact` 不作为新会话处理；压缩后可能继续当前轮次
 如果还有其他活动会话，灯会显示它们中优先级最高的状态。
 
 运行中状态在两小时没有新事件后过期；等待审批和等待回答在 24 小时没有新事件后过期。
-守护进程每 30 秒检查过期状态。会话状态只保存在守护进程内存中；服务重启后，已有会话不会自动恢复，需等 Agent 发来下一条 hook 事件。
+守护进程每 30 秒检查过期状态。过期会话转为空闲，空闲记录最多保留 24 小时，因此状态页的统计也会显示这些记录。会话状态只保存在守护进程内存中；服务重启后，已有会话不会自动恢复，需等 Agent 发来下一条 hook 事件。
 
 ## 安装范围
 

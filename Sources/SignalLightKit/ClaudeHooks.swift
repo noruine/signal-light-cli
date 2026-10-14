@@ -9,6 +9,7 @@ public struct ClaudeHookPayload: Codable, Sendable, Equatable {
     public var cwd: String
     public var hookEventName: ClaudeHookEventName
     public var sessionID: String
+    public var source: String?
     public var toolName: String?
     /// Set on hooks fired by subagents. The parent session reports subagent
     /// activity itself, so these are dropped to avoid duplicate sessions.
@@ -18,12 +19,14 @@ public struct ClaudeHookPayload: Codable, Sendable, Equatable {
         cwd: String,
         hookEventName: ClaudeHookEventName,
         sessionID: String,
+        source: String? = nil,
         toolName: String? = nil,
         agentID: String? = nil
     ) {
         self.cwd = cwd
         self.hookEventName = hookEventName
         self.sessionID = sessionID
+        self.source = source
         self.toolName = toolName
         self.agentID = agentID
     }
@@ -32,6 +35,7 @@ public struct ClaudeHookPayload: Codable, Sendable, Equatable {
         case cwd
         case hookEventName = "hook_event_name"
         case sessionID = "session_id"
+        case source
         case toolName = "tool_name"
         case agentID = "agent_id"
     }

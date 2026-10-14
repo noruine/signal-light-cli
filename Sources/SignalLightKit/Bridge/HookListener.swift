@@ -4,28 +4,28 @@ import Foundation
 /// Hosts the Unix socket that `agent-hooks` posts to.
 ///
 /// One connection carries one JSON `HookEvent` and gets a one-line ack. The
-/// daemon hears about bucket changes through `onBucketChange`, so there is no
+/// daemon hears about session summaries through `onStateChange`, so there is no
 /// second client and no loopback connection to babysit.
 public actor HookListener {
     private let socketURL: URL
     private let registry: SessionRegistry
-    private let onBucketChange: @Sendable (SignalLightBucket) -> Void
+    private let onStateChange: @Sendable (SessionRegistry.Summary) -> Void
     private let acceptQueue = DispatchQueue(label: "app.signal-light.hook-listener")
     private let connectionQueue = DispatchQueue(label: "app.signal-light.hook-connections", attributes: .concurrent)
     private var refreshTask: Task<Void, Never>?
     private var listenFD: Int32 = -1
     private var acceptSource: (any DispatchSourceRead)?
 
-    /// - Parameter onBucketChange: Called for every bucket the registry lands
-    ///   on, repeats included — the daemon decides whether the light changes.
+    /// - Parameter onStateChange: Called after every event and refresh, even
+    ///   when the resolved bucket stays the same.
     public init(
         socketURL: URL,
         registry: SessionRegistry,
-        onBucketChange: @escaping @Sendable (SignalLightBucket) -> Void
+        onStateChange: @escaping @Sendable (SessionRegistry.Summary) -> Void
     ) {
         self.socketURL = socketURL
         self.registry = registry
-        self.onBucketChange = onBucketChange
+        self.onStateChange = onStateChange
     }
 
     /// Binds the socket and starts accepting, throwing if the bind fails so a
@@ -63,7 +63,7 @@ public actor HookListener {
         _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
 
         let registry = registry
-        let onBucketChange = onBucketChange
+        let onStateChange = onStateChange
         let connectionQueue = connectionQueue
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: acceptQueue)
         source.setEventHandler {
@@ -72,7 +72,7 @@ public actor HookListener {
                 guard client >= 0 else { break }  // EAGAIN once the queue drains
                 connectionQueue.async {
                     Task {
-                        await Self.handle(client, registry: registry, onBucketChange: onBucketChange)
+                        await Self.handle(client, registry: registry, onStateChange: onStateChange)
                     }
                 }
             }
@@ -80,12 +80,12 @@ public actor HookListener {
         source.resume()
 
         let refreshRegistry = registry
-        let refreshCallback = onBucketChange
+        let refreshCallback = onStateChange
         refreshTask = Task.detached {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { return }
-                await refreshRegistry.refresh(onBucketChange: refreshCallback)
+                await refreshRegistry.refresh(onStateChange: refreshCallback)
             }
         }
 
@@ -108,7 +108,7 @@ public actor HookListener {
     private static func handle(
         _ fd: Int32,
         registry: SessionRegistry,
-        onBucketChange: @escaping @Sendable (SignalLightBucket) -> Void
+        onStateChange: @escaping @Sendable (SessionRegistry.Summary) -> Void
     ) async {
         defer { close(fd) }
 
@@ -119,7 +119,7 @@ public actor HookListener {
 
         // Apply before acking: the ack promises the event reached the state
         // machine, not merely the socket — clients may act on that.
-        await registry.apply(event, onBucketChange: onBucketChange)
+        await registry.apply(event, onStateChange: onStateChange)
 
         let ack = Data(#"{"ok":true}"#.utf8) + Data([0x0A])
         _ = ack.withUnsafeBytes { write(fd, $0.baseAddress, ack.count) }

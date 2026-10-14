@@ -6,15 +6,33 @@ import Foundation
 /// are keyed by source + session id, so Claude and Codex can never collide
 /// on a UUID.
 public actor SessionRegistry {
-    public enum Phase: Sendable, Equatable {
+    public enum Phase: String, Codable, Sendable, Equatable {
         case idle
         case running
         case waitingForApproval
         case waitingForAnswer
     }
 
+    public struct SessionStatus: Codable, Sendable, Equatable {
+        public let source: HookEvent.Source
+        public let sessionID: String
+        public let phase: Phase
+
+        public init(source: HookEvent.Source, sessionID: String, phase: Phase) {
+            self.source = source
+            self.sessionID = sessionID
+            self.phase = phase
+        }
+    }
+
+    public struct Summary: Sendable, Equatable {
+        public let bucket: SignalLightBucket
+        public let sessions: [SessionStatus]
+    }
+
     public struct Session: Sendable, Equatable {
         public let source: HookEvent.Source
+        public let sessionID: String
         public var phase: Phase
         public var updatedAt: Date
     }
@@ -43,13 +61,13 @@ public actor SessionRegistry {
     public func apply(
         _ event: HookEvent,
         at timestamp: Date? = nil,
-        onBucketChange: (@Sendable (SignalLightBucket) -> Void)? = nil
+        onStateChange: (@Sendable (Summary) -> Void)? = nil
     ) -> SignalLightBucket {
         let timestamp = timestamp ?? now()
         guard event.version == HookEvent.currentVersion else {
-            let currentBucket = bucket(at: timestamp)
-            onBucketChange?(currentBucket)
-            return currentBucket
+            let summary = summary(at: timestamp)
+            onStateChange?(summary)
+            return summary.bucket
         }
 
         let key = Self.key(for: event)
@@ -58,7 +76,12 @@ public actor SessionRegistry {
             sessions.removeValue(forKey: key)
 
         case .sessionStart:
-            sessions[key] = Session(source: event.source, phase: .idle, updatedAt: timestamp)
+            sessions[key] = Session(
+                source: event.source,
+                sessionID: event.sessionID,
+                phase: .idle,
+                updatedAt: timestamp
+            )
 
         case .stop, .stopFailure, .interrupt:
             if var session = sessions[key] {
@@ -68,41 +91,56 @@ public actor SessionRegistry {
             }
 
         case .userPromptSubmit, .postToolUse:
-            update(key, source: event.source, at: timestamp) { session in
+            update(key, source: event.source, sessionID: event.sessionID, at: timestamp) { session in
                 session.phase = .running
             }
 
         case .permissionRequest:
-            update(key, source: event.source, at: timestamp) { session in
+            update(key, source: event.source, sessionID: event.sessionID, at: timestamp) { session in
                 session.phase = event.isQuestion ? .waitingForAnswer : .waitingForApproval
             }
         }
 
         prune(at: timestamp)
-        let currentBucket = bucket(at: timestamp)
-        onBucketChange?(currentBucket)
-        return currentBucket
+        let summary = summary(at: timestamp)
+        onStateChange?(summary)
+        return summary.bucket
     }
 
     /// Recomputes expiring session states and publishes the current bucket.
-    public func refresh(onBucketChange: @Sendable (SignalLightBucket) -> Void) {
+    public func refresh(onStateChange: @Sendable (Summary) -> Void) {
         let timestamp = now()
         prune(at: timestamp)
-        onBucketChange(bucket(at: timestamp))
+        onStateChange(summary(at: timestamp))
     }
 
     public func bucket(at timestamp: Date? = nil) -> SignalLightBucket {
+        summary(at: timestamp).bucket
+    }
+
+    public func summary(at timestamp: Date? = nil) -> Summary {
         let timestamp = timestamp ?? now()
-        if sessions.values.contains(where: { isLive($0, at: timestamp) && $0.phase == .waitingForApproval }) {
-            return .needsApproval
+        let statuses = sessions.values.map { session in
+            SessionStatus(
+                source: session.source,
+                sessionID: session.sessionID,
+                phase: isLive(session, at: timestamp) ? session.phase : .idle
+            )
+        }.sorted {
+            if $0.source != $1.source { return $0.source.rawValue < $1.source.rawValue }
+            return $0.sessionID < $1.sessionID
         }
-        if sessions.values.contains(where: { isLive($0, at: timestamp) && $0.phase == .waitingForAnswer }) {
-            return .needsAnswer
+        let bucket: SignalLightBucket
+        if statuses.contains(where: { $0.phase == .waitingForApproval }) {
+            bucket = .needsApproval
+        } else if statuses.contains(where: { $0.phase == .waitingForAnswer }) {
+            bucket = .needsAnswer
+        } else if statuses.contains(where: { $0.phase == .running }) {
+            bucket = .running
+        } else {
+            bucket = .idle
         }
-        if sessions.values.contains(where: { isLive($0, at: timestamp) && $0.phase == .running }) {
-            return .running
-        }
-        return .idle
+        return Summary(bucket: bucket, sessions: statuses)
     }
 
     public func snapshot() -> [String: Session] {
@@ -116,10 +154,11 @@ public actor SessionRegistry {
     private func update(
         _ key: String,
         source: HookEvent.Source,
+        sessionID: String,
         at timestamp: Date,
         _ body: (inout Session) -> Void
     ) {
-        var session = sessions[key] ?? Session(source: source, phase: .idle, updatedAt: timestamp)
+        var session = sessions[key] ?? Session(source: source, sessionID: sessionID, phase: .idle, updatedAt: timestamp)
         body(&session)
         session.updatedAt = timestamp
         sessions[key] = session

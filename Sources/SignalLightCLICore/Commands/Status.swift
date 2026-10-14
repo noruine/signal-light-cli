@@ -120,11 +120,55 @@ struct StatusSnapshot {
             if let bucket = state?.currentBucket {
                 terminal.out("    当前状态  \(SignalLightBucketDisplay.name(forRaw: bucket))")
             }
+            for line in Self.sessionLines(sessions: state?.sessions, bucket: state?.currentBucket) {
+                terminal.out(line)
+            }
         } else {
             terminal.out("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
         }
 
         terminal.out("    日志      \(PathText.abbreviated(paths.logURL))")
+    }
+
+    static func sessionLines(
+        sessions: [SessionRegistry.SessionStatus]?,
+        bucket rawBucket: String?
+    ) -> [String] {
+        guard let sessions else { return ["    会话      尚未收到会话事件"] }
+        guard !sessions.isEmpty else {
+            return ["    会话      暂无会话记录", "    灯态主导  空闲（没有活动会话）"]
+        }
+
+        let phases: [(SessionRegistry.Phase, String)] = [
+            (.running, "运行中"),
+            (.waitingForApproval, "等待审批"),
+            (.waitingForAnswer, "等待回答"),
+            (.idle, "空闲"),
+        ]
+        let counts = phases.compactMap { phase, name -> String? in
+            let count = sessions.filter { $0.phase == phase }.count
+            return count == 0 ? nil : "\(name) \(count)"
+        }
+        let countLine = "    会话      \(sessions.count) 个：\(counts.joined(separator: "、"))"
+
+        guard let bucket = rawBucket.flatMap(SignalLightBucket.init(rawValue:)), bucket != .idle else {
+            return [countLine, "    灯态主导  空闲（没有活动会话）"]
+        }
+        let phase: SessionRegistry.Phase = switch bucket {
+        case .idle: .idle
+        case .running: .running
+        case .needsApproval: .waitingForApproval
+        case .needsAnswer: .waitingForAnswer
+        }
+        let drivers = sessions.filter { $0.phase == phase }.map { session in
+            let agent = session.source == .claude ? "Claude Code" : "Codex"
+            let sessionID = String(session.sessionID.prefix(8)) + (session.sessionID.count > 8 ? "…" : "")
+            return "\(agent) · \(sessionID)"
+        }
+        let driverLine = drivers.isEmpty
+            ? "    灯态主导  \(SignalLightBucketDisplay.name(bucket))"
+            : "    灯态主导  \(SignalLightBucketDisplay.name(bucket))：\(drivers.joined(separator: "、"))"
+        return [countLine, driverLine]
     }
 
     /// One compact line for the interactive menu's header: service state, the
@@ -265,6 +309,7 @@ struct StatusSnapshot {
             let ble: String
             let deviceName: String?
             let currentBucket: String?
+            let sessions: [SessionRegistry.SessionStatus]?
             /// Whether the `ble`/`currentBucket`/`stateUpdatedAt` fields come
             /// from a daemon that is still running.
             let stateLive: Bool
@@ -283,6 +328,7 @@ struct StatusSnapshot {
             ble: stateIsLive ? (state?.ble.rawValue ?? SignalLightDaemonState.BLE.disconnected.rawValue) : "unknown",
             deviceName: deviceName,
             currentBucket: stateIsLive ? state?.currentBucket : nil,
+            sessions: stateIsLive ? state?.sessions : nil,
             stateLive: stateIsLive,
             stateUpdatedAt: state.map { ISO8601DateFormatter().string(from: $0.updatedAt) },
             logPath: paths.logURL.path

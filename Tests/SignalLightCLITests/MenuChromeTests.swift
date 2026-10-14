@@ -45,6 +45,19 @@ struct MenuChromeTests {
         #expect(StatusSnapshot.menuHooksDescription(for: ["Claude Code", "Codex"]) == "Claude Code + Codex")
     }
 
+    @Test("Status lists per-session counts and the sessions driving the light")
+    func statusSessionLines() {
+        let sessions = [
+            SessionRegistry.SessionStatus(source: .claude, sessionID: "12345678-abc", phase: .running),
+            SessionRegistry.SessionStatus(source: .codex, sessionID: "abcdefgh-xyz", phase: .waitingForAnswer),
+        ]
+
+        #expect(StatusSnapshot.sessionLines(sessions: sessions, bucket: "needsAnswer") == [
+            "    会话      2 个：运行中 1、等待回答 1",
+            "    灯态主导  等待回答：Codex · abcdefgh…",
+        ])
+    }
+
     @Test("The breadcrumb reads root, then the trail")
     func breadcrumbTrail() {
         #expect(plain.menuBreadcrumb() == "信号灯")

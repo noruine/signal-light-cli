@@ -13,7 +13,9 @@ public enum HookEventMapper {
 
         let kind: HookEvent.Kind
         switch payload.hookEventName {
-        case .sessionStart: kind = .sessionStart
+        case .sessionStart:
+            guard payload.source != "compact" else { return nil }
+            kind = .sessionStart
         case .userPromptSubmit: kind = .userPromptSubmit
         case .preToolUse:
             guard payload.toolName == "AskUserQuestion" else { return nil }

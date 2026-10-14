@@ -71,9 +71,9 @@ enum SignalLightDaemonRunner {
         controller.reloadSettings()
 
         let registry = SessionRegistry()
-        let hookListener = HookListener(socketURL: paths.bridgeSocketURL, registry: registry) { bucket in
-            controller.applyBucket(bucket)
-            stateWriter.updateBucket(bucket.rawValue)
+        let hookListener = HookListener(socketURL: paths.bridgeSocketURL, registry: registry) { summary in
+            controller.applyBucket(summary.bucket)
+            stateWriter.updateSessionSummary(summary)
         }
         try await hookListener.start()
         log.log(.info, "hook socket listening")
@@ -223,6 +223,7 @@ private final class DaemonStateWriter: @unchecked Sendable {
     private var ble: SignalLightDaemonState.BLE = .disconnected
     private var deviceName: String?
     private var currentBucket: String?
+    private var sessions: [SessionRegistry.SessionStatus]?
 
     init(paths: SignalLightDaemonPaths) {
         self.paths = paths
@@ -236,9 +237,10 @@ private final class DaemonStateWriter: @unchecked Sendable {
         persist()
     }
 
-    func updateBucket(_ bucket: String) {
+    func updateSessionSummary(_ summary: SessionRegistry.Summary) {
         lock.lock()
-        currentBucket = bucket
+        currentBucket = summary.bucket.rawValue
+        sessions = summary.sessions
         lock.unlock()
         persist()
     }
@@ -249,6 +251,7 @@ private final class DaemonStateWriter: @unchecked Sendable {
             ble: ble,
             deviceName: deviceName,
             currentBucket: currentBucket,
+            sessions: sessions,
             updatedAt: Date(),
             pid: pid
         )

@@ -300,6 +300,7 @@ public struct SignalLightDaemonState: Codable, Sendable, Equatable {
     /// importing the enum, so this file has zero dependency on `SignalLight.swift`
     /// beyond a string contract, and stays trivially `Codable` either way.
     public var currentBucket: String?
+    public var sessions: [SessionRegistry.SessionStatus]?
     public var updatedAt: Date
     /// The writing daemon's process id. The daemon never writes a final
     /// "disconnected" snapshot on shutdown, so readers need a way to tell a
@@ -307,10 +308,18 @@ public struct SignalLightDaemonState: Codable, Sendable, Equatable {
     /// `nil` for files written before this field existed.
     public var pid: Int?
 
-    public init(ble: BLE, deviceName: String?, currentBucket: String?, updatedAt: Date, pid: Int? = nil) {
+    public init(
+        ble: BLE,
+        deviceName: String?,
+        currentBucket: String?,
+        sessions: [SessionRegistry.SessionStatus]? = nil,
+        updatedAt: Date,
+        pid: Int? = nil
+    ) {
         self.ble = ble
         self.deviceName = deviceName
         self.currentBucket = currentBucket
+        self.sessions = sessions
         self.updatedAt = updatedAt
         self.pid = pid
     }

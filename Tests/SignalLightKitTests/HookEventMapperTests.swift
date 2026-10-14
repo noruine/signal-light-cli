@@ -54,6 +54,19 @@ struct HookEventMapperTests {
         #expect(HookEventMapper.event(from: payload) == nil)
     }
 
+    @Test("Claude compaction does not reset the session to idle")
+    func claudeCompactionSessionStart() throws {
+        let compact = try decodeClaude(
+            #"{"hook_event_name":"SessionStart","session_id":"s1","cwd":"/tmp","source":"compact"}"#
+        )
+        let startup = try decodeClaude(
+            #"{"hook_event_name":"SessionStart","session_id":"s1","cwd":"/tmp","source":"startup"}"#
+        )
+
+        #expect(HookEventMapper.event(from: compact) == nil)
+        #expect(HookEventMapper.event(from: startup)?.kind == .sessionStart)
+    }
+
     @Test("Codex events map onto the same shape")
     func codexApproval() throws {
         let payload = try decodeCodex(#"{"hook_event_name":"PermissionRequest","session_id":"c1","cwd":"/tmp"}"#)
