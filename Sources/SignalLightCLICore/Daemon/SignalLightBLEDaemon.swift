@@ -2,6 +2,13 @@
 import Foundation
 import SignalLightKit
 
+enum BLEDiscoveryFailure {
+    static func reason(error: String?, foundRequiredResource: Bool, resourceName: String) -> String? {
+        if let error { return error }
+        return foundRequiredResource ? nil : "未找到\(resourceName)"
+    }
+}
+
 /// Headless BLE controller for the ESP32-C3 signal light — no UI, no
 /// `@Observable`. All scan/connect/reconnect work runs on a private serial
 /// queue instead of `.main`: `AsyncParsableCommand` blocks the main
@@ -155,12 +162,14 @@ final class SignalLightBLEDaemon: NSObject, @unchecked Sendable {
     /// moment a connection actually succeeds — this is what makes the
     /// daemon safe to leave running unattended without hammering the radio.
     private func scheduleReconnect() {
-        reconnectWorkItem?.cancel()
+        guard reconnectWorkItem == nil else { return }
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 30)
 
         let workItem = DispatchWorkItem { [weak self] in
-            self?.attemptConnect()
+            guard let self else { return }
+            self.reconnectWorkItem = nil
+            self.attemptConnect()
         }
         reconnectWorkItem = workItem
         queue.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -225,6 +234,8 @@ extension SignalLightBLEDaemon: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
             reconnectDelay = 1
             attemptConnect()
         case .unauthorized:
@@ -255,33 +266,53 @@ extension SignalLightBLEDaemon: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?) {
-        log.log(.warn, "信号灯连接失败：\(error?.localizedDescription ?? "未知错误")")
+        failConnection(reason: error?.localizedDescription ?? "未知错误")
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
+        failConnection(reason: error?.localizedDescription ?? "连接已断开")
+    }
+
+    private func failConnection(reason: String) {
+        log.log(.warn, "信号灯连接失败：\(reason)")
         connectedPeripheral = nil
         commandCharacteristic = nil
         onStateChange?(.disconnected)
         scheduleReconnect()
     }
 
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
-        connectedPeripheral = nil
-        commandCharacteristic = nil
-        onStateChange?(.disconnected)
-        scheduleReconnect()
+    private func failDiscovery(_ peripheral: CBPeripheral, reason: String) {
+        centralManager?.cancelPeripheralConnection(peripheral)
+        failConnection(reason: reason)
     }
 }
 
 extension SignalLightBLEDaemon: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
-        guard let service = peripheral.services?.first(where: { $0.uuid == SignalLightBLESession.serviceUUID }) else {
+        let service = peripheral.services?.first(where: { $0.uuid == SignalLightBLESession.serviceUUID })
+        if let reason = BLEDiscoveryFailure.reason(
+            error: error?.localizedDescription,
+            foundRequiredResource: service != nil,
+            resourceName: "信号灯服务"
+        ) {
+            failDiscovery(peripheral, reason: reason)
             return
         }
+        guard let service else { return }
         peripheral.discoverCharacteristics([SignalLightBLESession.commandCharacteristicUUID], for: service)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
-        guard let characteristic = service.characteristics?.first(where: { $0.uuid == SignalLightBLESession.commandCharacteristicUUID }) else {
+        let characteristic = service.characteristics?.first(where: { $0.uuid == SignalLightBLESession.commandCharacteristicUUID })
+        if let reason = BLEDiscoveryFailure.reason(
+            error: error?.localizedDescription,
+            foundRequiredResource: characteristic != nil,
+            resourceName: "控制特征"
+        ) {
+            failDiscovery(peripheral, reason: reason)
             return
         }
+        guard let characteristic else { return }
         commandCharacteristic = characteristic
         reconnectDelay = 1
         onStateChange?(.connected(name: peripheral.name ?? "Signal Light"))
