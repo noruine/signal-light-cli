@@ -263,11 +263,20 @@ final class SignalLightBLESession: NSObject, @unchecked Sendable {
     }
 
     private func failConnect(_ error: Error) {
+        guard let continuation = connectContinuation else { return }
+        connectContinuation = nil
         scanTimeout?.cancel()
         scanTimeout = nil
         central?.stopScan()
-        guard let continuation = connectContinuation else { return }
-        connectContinuation = nil
+        if let peripheral {
+            central?.cancelPeripheralConnection(peripheral)
+        }
+        peripheral = nil
+        commandChar = nil
+        otaControlChar = nil
+        otaDataChar = nil
+        infoChar = nil
+        readiness = BLESessionReadiness()
         continuation.resume(throwing: error)
     }
 
@@ -348,6 +357,11 @@ extension SignalLightBLESession: CBCentralManagerDelegate {
 
 extension SignalLightBLESession: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
+        if let error {
+            failConnect(SignalLightSessionError.connectFailed(error.localizedDescription))
+            return
+        }
+
         guard let service = peripheral.services?.first(where: { $0.uuid == Self.serviceUUID }) else {
             failConnect(SignalLightSessionError.notReady)
             return
