@@ -34,12 +34,16 @@ public enum ManagedHooksBinary {
                 if attributes[.type] as? FileAttributeType == .typeDirectory {
                     throw ManagedHooksBinaryError.destinationIsDirectory(resolvedDestinationURL)
                 }
-                try fileManager.removeItem(at: resolvedDestinationURL)
             }
-            try fileManager.copyItem(at: resolvedSourceURL, to: resolvedDestinationURL)
+            try ExecutableInstaller.replace(
+                from: resolvedSourceURL,
+                to: resolvedDestinationURL,
+                fileManager: fileManager
+            )
+        } else {
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resolvedDestinationURL.path)
         }
 
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resolvedDestinationURL.path)
         return resolvedDestinationURL
     }
 
@@ -61,9 +65,7 @@ public enum ManagedHooksBinary {
             return false
         }
 
-        try fileManager.removeItem(at: installedURL)
-        try fileManager.copyItem(at: sourceURL, to: installedURL)
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installedURL.path)
+        try ExecutableInstaller.replace(from: sourceURL, to: installedURL, fileManager: fileManager)
         return true
     }
 

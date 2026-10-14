@@ -156,14 +156,8 @@ enum Installation {
         // wherever this build happened to live.
         let sourceBinary = currentExecutable.resolvingSymlinksInPath()
 
-        try FileManager.default.createDirectory(at: paths.binDir, withIntermediateDirectories: true)
-
-        if FileManager.default.fileExists(atPath: paths.binURL.path) {
-            try FileManager.default.removeItem(at: paths.binURL)
-        }
-        try FileManager.default.copyItem(at: sourceBinary, to: paths.binURL)
+        try ExecutableInstaller.replace(from: sourceBinary, to: paths.binURL)
         terminal.progress("    • 复制程序 → \(displayPath(paths.binURL))")
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: paths.binURL.path)
     }
 
     /// Symlinks `~/.local/bin/signal-light` → the real installed binary, so the
