@@ -78,6 +78,17 @@ public struct LaunchAgentControl {
     }
 
     private func writePlist(binaryPath: String, runAtLoad: Bool) throws {
+        let fileManager = FileManager.default
+        let plistPath = paths.launchAgentPlistURL.path
+        let entryExists = fileManager.fileExists(atPath: plistPath)
+            || (try? fileManager.destinationOfSymbolicLink(atPath: plistPath)) != nil
+        if entryExists, !paths.owns(paths.launchAgentPlistURL, fileManager: fileManager) {
+            throw CLIError(
+                "LaunchAgent 配置已存在且不属于本工具，安装不会覆盖：\(plistPath)",
+                exitCode: .noInput
+            )
+        }
+
         let spec = LaunchAgentSpec(
             label: SignalLightDaemonPaths.launchAgentLabel,
             programArguments: [binaryPath, "run"],
@@ -85,7 +96,7 @@ public struct LaunchAgentControl {
             stderrPath: paths.logURL.path,
             runAtLoad: runAtLoad
         )
-        try FileManager.default.createDirectory(at: paths.launchAgentsDir, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: paths.launchAgentsDir, withIntermediateDirectories: true)
         try spec.serialize().write(to: paths.launchAgentPlistURL, options: .atomic)
     }
 

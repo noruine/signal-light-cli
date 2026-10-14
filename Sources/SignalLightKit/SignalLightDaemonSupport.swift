@@ -191,6 +191,10 @@ public struct SignalLightDaemonPaths: Sendable {
             return false
         }
 
+        if url.standardizedFileURL.path == launchAgentPlistURL.standardizedFileURL.path {
+            return ownsLaunchAgentPlist(url, fileManager: fileManager)
+        }
+
         guard url.standardizedFileURL.path == pathSymlinkURL.standardizedFileURL.path else {
             return true
         }
@@ -200,6 +204,17 @@ public struct SignalLightDaemonPaths: Sendable {
         }
         let destination = URL(fileURLWithPath: target, relativeTo: url.deletingLastPathComponent())
         return destination.standardizedFileURL.path == binURL.standardizedFileURL.path
+    }
+
+    private func ownsLaunchAgentPlist(_ url: URL, fileManager: FileManager) -> Bool {
+        guard (try? fileManager.destinationOfSymbolicLink(atPath: url.path)) == nil,
+              let data = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              plist["Label"] as? String == Self.launchAgentLabel,
+              let arguments = plist["ProgramArguments"] as? [String] else {
+            return false
+        }
+        return arguments == [binURL.path, "run"]
     }
 }
 

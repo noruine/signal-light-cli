@@ -4,8 +4,32 @@ import SignalLightKit
 
 @testable import SignalLightCLICore
 
-@Suite("LaunchAgent shutdown")
+@Suite("LaunchAgent control")
 struct LaunchAgentControlTests {
+    @Test("A foreign plist at the product path is not overwritten")
+    func foreignPlistIsPreserved() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-light-launchagent-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let paths = SignalLightDaemonPaths(home: root)
+        try FileManager.default.createDirectory(at: paths.launchAgentsDir, withIntermediateDirectories: true)
+        let foreign = try LaunchAgentSpec(
+            label: "another.product.agent",
+            programArguments: ["/usr/local/bin/another-product", "run"],
+            stdoutPath: "/tmp/another.log",
+            stderrPath: "/tmp/another.log",
+            runAtLoad: true
+        ).serialize()
+        try foreign.write(to: paths.launchAgentPlistURL)
+
+        let control = LaunchAgentControl(paths: paths, processRunner: LaunchctlStub(pid: 0, bootoutExitCode: 0))
+        #expect(throws: CLIError.self) {
+            try control.install(binaryPath: paths.binURL.path, runAtLoad: false)
+        }
+        #expect(try Data(contentsOf: paths.launchAgentPlistURL) == foreign)
+    }
+
     @Test("Waits for the daemon process to exit after bootout")
     func waitsForProcessExit() async throws {
         let control = LaunchAgentControl(

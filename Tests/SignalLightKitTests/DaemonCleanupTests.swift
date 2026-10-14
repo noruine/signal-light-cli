@@ -62,4 +62,24 @@ struct DaemonCleanupTests {
         #expect(report.keptForeignEntries.contains(paths.bridgeSocketURL))
         #expect(try String(contentsOf: marker, encoding: .utf8) == "keep")
     }
+
+    @Test("A foreign LaunchAgent plist is preserved during cleanup")
+    func foreignLaunchAgentIsPreserved() throws {
+        let (home, paths) = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: paths.launchAgentsDir, withIntermediateDirectories: true)
+        let foreign = try LaunchAgentSpec(
+            label: "another.product.agent",
+            programArguments: ["/usr/local/bin/another-product", "run"],
+            stdoutPath: "/tmp/another.log",
+            stderrPath: "/tmp/another.log",
+            runAtLoad: true
+        ).serialize()
+        try foreign.write(to: paths.launchAgentPlistURL)
+
+        let report = try DaemonCleanup.perform(paths: paths, socketIsInactive: { _ in true })
+
+        #expect(report.keptForeignEntries.contains(paths.launchAgentPlistURL))
+        #expect(try Data(contentsOf: paths.launchAgentPlistURL) == foreign)
+    }
 }
