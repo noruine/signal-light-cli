@@ -25,7 +25,11 @@ enum StatusMonitor {
                 terminal: terminal,
                 trail: trail,
                 context: [],
-                body: snapshot.humanReadableLines(terminal: terminal, includeHeading: false),
+                body: snapshot.humanReadableLines(
+                    terminal: terminal,
+                    includeHeading: false,
+                    sessionSummaryStyle: .menu
+                ),
                 bar: footer
             ))
             if shouldReturnToMenu() { return }

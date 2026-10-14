@@ -107,7 +107,11 @@ struct StatusSnapshot {
         }
     }
 
-    func humanReadableLines(terminal: Terminal, includeHeading: Bool) -> [String] {
+    func humanReadableLines(
+        terminal: Terminal,
+        includeHeading: Bool,
+        sessionSummaryStyle: SessionSummaryStyle = .command
+    ) -> [String] {
         var lines: [String] = []
         // Inside the menu the breadcrumb already names the screen; only a
         // bare `signal-light status` needs the product title of its own.
@@ -127,7 +131,11 @@ struct StatusSnapshot {
             if let bucket = state?.currentBucket {
                 lines.append("    当前状态  \(SignalLightBucketDisplay.name(forRaw: bucket))")
             }
-            lines.append(contentsOf: Self.sessionLines(sessions: state?.sessions))
+            let sessionLines = switch sessionSummaryStyle {
+            case .command: Self.sessionLines(sessions: state?.sessions)
+            case .menu: Self.menuSessionLines(sessions: state?.sessions)
+            }
+            lines.append(contentsOf: sessionLines)
         } else {
             lines.append("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
         }
@@ -136,12 +144,31 @@ struct StatusSnapshot {
         return lines
     }
 
+    enum SessionSummaryStyle {
+        case command
+        case menu
+    }
+
     static func sessionLines(
         sessions: [SessionRegistry.SessionStatus]?
     ) -> [String] {
-        guard let sessions else { return ["    会话      尚未收到会话事件"] }
-        guard !sessions.isEmpty else { return ["    会话      暂无会话记录"] }
+        guard let summary = sessionSummary(sessions) else { return ["    会话      尚未收到会话事件"] }
+        guard !summary.counts.isEmpty else { return ["    会话      暂无会话记录"] }
 
+        return ["    会话      \(summary.total) 个：\(summary.counts.joined(separator: "、"))"]
+    }
+
+    static func menuSessionLines(sessions: [SessionRegistry.SessionStatus]?) -> [String] {
+        guard let summary = sessionSummary(sessions) else { return ["会话  尚未收到事件"] }
+        guard !summary.counts.isEmpty else { return ["会话  暂无记录"] }
+
+        return ["会话  \(summary.total) 个（\(summary.counts.joined(separator: "、"))）"]
+    }
+
+    private static func sessionSummary(
+        _ sessions: [SessionRegistry.SessionStatus]?
+    ) -> (total: Int, counts: [String])? {
+        guard let sessions else { return nil }
         let phases: [(SessionRegistry.Phase, String)] = [
             (.running, "运行中"),
             (.waitingForApproval, "等待审批"),
@@ -152,8 +179,7 @@ struct StatusSnapshot {
             let count = sessions.filter { $0.phase == phase }.count
             return count == 0 ? nil : "\(name) \(count)"
         }
-        let countLine = "    会话      \(sessions.count) 个：\(counts.joined(separator: "、"))"
-        return [countLine]
+        return (sessions.count, counts)
     }
 
     /// One compact line for the interactive menu's header: service state, the
@@ -172,7 +198,7 @@ struct StatusSnapshot {
                 "当前状态 \(menuBucketDescription)",
             ]
             lines.append("    " + light.joined(separator: "   "))
-            lines.append(contentsOf: Self.sessionLines(sessions: state?.sessions))
+            lines.append(contentsOf: Self.menuSessionLines(sessions: state?.sessions))
         }
         return lines
     }

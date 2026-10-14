@@ -55,6 +55,9 @@ struct MenuChromeTests {
         #expect(StatusSnapshot.sessionLines(sessions: sessions) == [
             "    会话      2 个：运行中 1、等待回答 1",
         ])
+        #expect(StatusSnapshot.menuSessionLines(sessions: sessions) == [
+            "会话  2 个（运行中 1、等待回答 1）",
+        ])
     }
 
     @Test("The interactive header shows the same session counts as status")
@@ -82,8 +85,13 @@ struct MenuChromeTests {
             hookedAgents: ["Codex"]
         )
 
-        #expect(snapshot.menuHeaderLines(terminal: plain).last == "    会话      2 个：运行中 1、空闲 1")
+        #expect(snapshot.menuHeaderLines(terminal: plain).last == "会话  2 个（运行中 1、空闲 1）")
         #expect(!snapshot.menuHeaderLines(terminal: plain).joined().contains("灯态主导"))
+        #expect(snapshot.humanReadableLines(
+            terminal: plain,
+            includeHeading: false,
+            sessionSummaryStyle: .menu
+        ).contains("会话  2 个（运行中 1、空闲 1）"))
     }
 
     @Test("The breadcrumb reads root, then the trail")

@@ -57,29 +57,20 @@ enum RawMode {
         let setMode: Int32 = interceptingInterrupts ? TCSAFLUSH : TCSADRAIN
         guard tcsetattr(STDIN_FILENO, setMode, &raw) == 0 else { return nil }
         signalGuard.arm(original)
-        setMouseReporting(true)
+        disableMouseReporting()
         return original
     }
 
     static func restore(_ original: termios) {
-        setMouseReporting(false)
+        disableMouseReporting()
         var original = original
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
         signalGuard.disarm()
     }
 
-    private static func setMouseReporting(_ isEnabled: Bool) {
-        let sequence = isEnabled
-            ? "\u{1B}[?1006h\u{1B}[?1000h"
-            : "\u{1B}[?1000l\u{1B}[?1006l"
-        if isEnabled {
-            signalGuard.noteMouseReporting(true)
-        }
-        FileHandle.standardOutput.write(Data(sequence.utf8))
+    private static func disableMouseReporting() {
+        FileHandle.standardOutput.write(Data("\u{1B}[?1000l\u{1B}[?1006l".utf8))
         fflush(stdout)
-        if !isEnabled {
-            signalGuard.noteMouseReporting(false)
-        }
     }
 
     /// Throws away keys typed while no reader was watching (mashed during a
@@ -153,17 +144,10 @@ private final class RawModeSignalGuard: @unchecked Sendable {
     private var saved: termios?
     private var sources: [DispatchSourceSignal] = []
     private var inAlternateScreen = false
-    private var mouseReportingEnabled = false
 
     func noteAlternateScreen(_ active: Bool) {
         lock.lock()
         inAlternateScreen = active
-        lock.unlock()
-    }
-
-    func noteMouseReporting(_ enabled: Bool) {
-        lock.lock()
-        mouseReportingEnabled = enabled
         lock.unlock()
     }
 
@@ -204,14 +188,10 @@ private final class RawModeSignalGuard: @unchecked Sendable {
         lock.lock()
         let snapshot = saved
         let wasAlternate = inAlternateScreen
-        let wasMouseReporting = mouseReportingEnabled
         saved = nil
-        mouseReportingEnabled = false
         lock.unlock()
 
-        if wasMouseReporting {
-            FileHandle.standardError.write(Data("\u{1B}[?1000l\u{1B}[?1006l".utf8))
-        }
+        FileHandle.standardError.write(Data("\u{1B}[?1000l\u{1B}[?1006l".utf8))
         if wasAlternate {
             FileHandle.standardError.write(Data("\u{1B}[?1049l".utf8))
         }
