@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -10,8 +11,18 @@ struct DaemonCleanupTests {
             .appendingPathComponent("sl-test-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let paths = SignalLightDaemonPaths(home: home)
         try FileManager.default.createDirectory(at: paths.cliRootDir, withIntermediateDirectories: true)
-        try Data().write(to: paths.bridgeSocketURL)
+        try createSocketFile(at: paths.bridgeSocketURL)
         return (home, paths)
+    }
+
+    private func createSocketFile(at url: URL) throws {
+        var address = try #require(UnixSocket.address(for: url.path))
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        #expect(descriptor >= 0)
+        defer { close(descriptor) }
+
+        let result = UnixSocket.withSockaddr(&address) { bind(descriptor, $0, $1) }
+        #expect(result == 0)
     }
 
     @Test("A dead socket file is removed, and the emptied root goes with it")
@@ -61,6 +72,41 @@ struct DaemonCleanupTests {
 
         #expect(report.keptForeignEntries.contains(paths.bridgeSocketURL))
         #expect(try String(contentsOf: marker, encoding: .utf8) == "keep")
+    }
+
+    @Test("A regular file at the socket path is preserved")
+    func socketPathRegularFileIsPreserved() throws {
+        let (home, paths) = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.removeItem(at: paths.bridgeSocketURL)
+        let contents = Data("foreign file".utf8)
+        try contents.write(to: paths.bridgeSocketURL)
+        var probeCount = 0
+
+        let report = try DaemonCleanup.perform(paths: paths, socketIsInactive: { _ in
+            probeCount += 1
+            return true
+        })
+
+        #expect(probeCount == 0)
+        #expect(report.keptForeignEntries.contains(paths.bridgeSocketURL))
+        #expect(try Data(contentsOf: paths.bridgeSocketURL) == contents)
+    }
+
+    @Test("A symlink at the socket path is preserved")
+    func socketPathSymlinkIsPreserved() throws {
+        let (home, paths) = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.removeItem(at: paths.bridgeSocketURL)
+        let target = home.appendingPathComponent("foreign.txt")
+        try Data("keep".utf8).write(to: target)
+        try FileManager.default.createSymbolicLink(at: paths.bridgeSocketURL, withDestinationURL: target)
+
+        let report = try DaemonCleanup.perform(paths: paths, socketIsInactive: { _ in true })
+
+        #expect(report.keptForeignEntries.contains(paths.bridgeSocketURL))
+        #expect(try Data(contentsOf: target) == Data("keep".utf8))
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: paths.bridgeSocketURL.path)) != nil)
     }
 
     @Test("A foreign LaunchAgent plist is preserved during cleanup")

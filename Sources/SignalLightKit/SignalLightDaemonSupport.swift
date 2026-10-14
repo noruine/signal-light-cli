@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Single source of truth for every filesystem path `SignalLightCLI` creates.
@@ -424,10 +425,10 @@ public enum DaemonCleanup {
             }
         }
 
-        for socket in paths.ownedSockets where fileManager.fileExists(atPath: socket.path) {
-            // Only ever unlink an actual socket entry: a directory at this
-            // path is somebody's tree, and `removeItem` would take it whole.
-            if isDirectory(socket, fileManager: fileManager) {
+        for socket in paths.ownedSockets where pathExists(socket, fileManager: fileManager) {
+            // Only unlink an actual socket entry. A regular file, directory,
+            // or symlink at this reserved path belongs to whoever put it there.
+            if !isSocket(socket) {
                 report.keptForeignEntries.append(socket)
             } else if socketIsInactive(socket) {
                 if removeIgnoringFailure(socket, fileManager: fileManager) {
@@ -495,8 +496,8 @@ public enum DaemonCleanup {
                 report.keptForeignEntries.append(file)
             }
         }
-        for socket in paths.ownedSockets where fileManager.fileExists(atPath: socket.path) {
-            if isDirectory(socket, fileManager: fileManager) {
+        for socket in paths.ownedSockets where pathExists(socket, fileManager: fileManager) {
+            if !isSocket(socket) {
                 report.keptForeignEntries.append(socket)
             } else if socketIsInactive(socket) {
                 report.remaining.append(socket)
@@ -532,7 +533,19 @@ public enum DaemonCleanup {
     }
 
     private static func isDirectory(_ url: URL, fileManager: FileManager) -> Bool {
-        (try? fileManager.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType == .typeDirectory
+        guard let mode = fileMode(at: url) else { return false }
+        return mode & S_IFMT == S_IFDIR
+    }
+
+    private static func isSocket(_ url: URL) -> Bool {
+        guard let mode = fileMode(at: url) else { return false }
+        return mode & S_IFMT == S_IFSOCK
+    }
+
+    private static func fileMode(at url: URL) -> mode_t? {
+        var info = stat()
+        guard lstat(url.path, &info) == 0 else { return nil }
+        return info.st_mode
     }
 
     /// `FileManager.fileExists` follows symlinks, so a dangling one (its
@@ -543,6 +556,6 @@ public enum DaemonCleanup {
     /// regardless of whether the target resolves, so a stray link can never
     /// be silently left behind.
     private static func pathExists(_ url: URL, fileManager: FileManager) -> Bool {
-        (try? fileManager.attributesOfItem(atPath: url.path)) != nil
+        fileMode(at: url) != nil
     }
 }
