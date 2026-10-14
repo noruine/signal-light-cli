@@ -115,6 +115,12 @@ struct HookIsolationTests {
         #expect(removed.contents == existing)
     }
 
+    @Test("The managed hook command carries --source codex")
+    func codexHookCommandCarriesSource() {
+        #expect(CodexHookInstaller.hookCommand(for: "/Users/tester/.signal-light/bin/agent-hooks")
+            == "'/Users/tester/.signal-light/bin/agent-hooks' --source codex")
+    }
+
     @Test("The managed hooks binary installs inside the tool's own root")
     func managedBinaryIsOwned() {
         let expected = FileManager.default.homeDirectoryForCurrentUser

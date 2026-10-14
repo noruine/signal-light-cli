@@ -96,7 +96,7 @@ public enum CodexHookInstaller {
     }
 
     public static func hookCommand(for binaryPath: String) -> String {
-        shellQuote(binaryPath)
+        "\(shellQuote(binaryPath)) --source codex"
     }
 
     public static func installHooksJSON(
