@@ -54,9 +54,8 @@ enum ConfigMenu {
         var interval = 0
         if type != .solid {
             let fallbackInterval = current.intervalMs > 0 ? current.intervalMs : 1000
-            // The answered picker must not sit under the next step.
-            ScreenLayout.beginStep()
-            guard let value = MenuPrompt.integer("变化快慢（毫秒，数字越小越快）", default: fallbackInterval) else { return }
+            // The prompt draws its own screen (step boundary included).
+            guard let value = MenuPrompt.integer("变化快慢（毫秒，数字越小越快）", default: fallbackInterval, terminal: terminal) else { return }
             interval = value
         }
 
@@ -118,7 +117,7 @@ enum ConfigMenu {
             guard let chosen else { return nil }
             if chosen.isEmpty {
                 terminal.warn("至少要选一个颜色。")
-                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("重选")]))
+                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("重选"), .escape("返回")]))
                 continue
             }
             return palette.enumerated().compactMap { chosen.contains($0.offset) ? $0.element : nil }
@@ -150,7 +149,7 @@ enum ConfigMenu {
 
                 try await session.sendCommand(SignalLightCommandEncoder.encode(effect))
                 terminal.out("已发到灯上。")
-                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("结束预览")]))
+                MenuPrompt.pause(terminal, message: terminal.keyBar([.enter("结束预览"), .escape("返回")]))
                 try? await session.sendCommand(SignalLightControlCommand.off)
             }
         } catch let cliError as CLIError {
@@ -161,7 +160,7 @@ enum ConfigMenu {
     }
 
     private static func editBrightness(current: Int, terminal: Terminal) async {
-        guard let value = MenuPrompt.integer("全局亮度（0-100）", default: current) else { return }
+        guard let value = MenuPrompt.integer("全局亮度（0-100）", default: current, terminal: terminal) else { return }
         await MenuCommandRunner.run(["config", "brightness", String(value)], terminal: terminal)
         MenuPrompt.pause(terminal)
     }

@@ -28,7 +28,13 @@ enum MenuPrompt {
         }
         defer { RawMode.restore(original) }
         FileHandle.standardError.write(Data(question.utf8))
+        return editLineBytes()
+    }
 
+    /// The raw-mode byte loop both prompt styles share: echo printable input
+    /// and Backspace from wherever the cursor sits; Enter ends the line and
+    /// returns it, Esc / Ctrl-C / Ctrl-D / EOF end it as `nil`.
+    private static func editLineBytes() -> String? {
         var buffer: [UInt8] = []
         while true {
             var byte: UInt8 = 0
@@ -70,12 +76,51 @@ enum MenuPrompt {
     }
 
     /// Free-text prompt with a default shown inline; a bare Enter keeps it,
-    /// Esc cancels (see `readLine`).
-    static func text(_ question: String, default defaultValue: String?) -> String? {
+    /// Esc cancels (see `readLine`). Inside the menu the prompt is a screen
+    /// like every other one — breadcrumb, the question as context, a `❯`
+    /// edit row, the key bar; a bare CLI run keeps the plain inline prompt.
+    /// `note` is a retry line (e.g. "not an integer") shown above the prompt
+    /// in both styles.
+    static func text(
+        _ question: String,
+        default defaultValue: String?,
+        note: String? = nil,
+        terminal: Terminal
+    ) -> String? {
         let suffix = defaultValue.map { " [\($0)]" } ?? ""
-        guard let line = readLine("\(question)\(suffix)（Esc 取消）：") else { return nil }
-        if line.isEmpty { return defaultValue }
-        return line
+
+        guard CLIRuntimeContext.isMenuSession else {
+            if let note { writeStderr("\(note)\n") }
+            guard let line = readLine("\(question)\(suffix)（Esc 取消）：") else { return nil }
+            return line.isEmpty ? defaultValue : line
+        }
+
+        RawMode.discardPendingInput()
+        guard let original = RawMode.enter() else {
+            if let note { writeStderr("\(note)\n") }
+            FileHandle.standardError.write(Data("\(question)\(suffix)（Esc 取消）：".utf8))
+            guard let line = Swift.readLine(strippingNewline: true) else { return nil }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? defaultValue : trimmed
+        }
+        defer { RawMode.restore(original) }
+
+        var context = ["\(question)\(suffix)"]
+        if let note { context.append(note) }
+        ScreenLayout.beginStep()
+        ScreenLayout.paint(ScreenLayout.lines(
+            terminal: terminal,
+            trail: CLIRuntimeContext.menuTrail.isEmpty ? nil : CLIRuntimeContext.menuTrail,
+            context: context,
+            body: [" "],
+            bar: terminal.keyBar([.enter("确认"), .escape("取消")])
+        ))
+        // The paint leaves the cursor under the key bar; hop onto the edit
+        // row and land the `❯` marker — the editor echoes from the cursor.
+        writeStderr("\u{1B}[3A\r ❯ ")
+        guard let value = editLineBytes() else { return nil }
+        writeStderr("\u{1B}[2B")
+        return value.isEmpty ? defaultValue : value
     }
 
     /// An integer prompt with a default, re-asking until the input parses as
@@ -84,19 +129,21 @@ enum MenuPrompt {
     /// checking is left to the command the value is passed to (e.g.
     /// `config brightness` rejects anything outside 0–100), so the same
     /// validation isn't duplicated in two places.
-    static func integer(_ question: String, default defaultValue: Int) -> Int? {
+    static func integer(_ question: String, default defaultValue: Int, terminal: Terminal) -> Int? {
+        var note: String?
         while true {
-            guard let raw = text(question, default: String(defaultValue)) else { return nil }
+            guard let raw = text(question, default: String(defaultValue), note: note, terminal: terminal) else { return nil }
             if let value = Int(raw) { return value }
-            FileHandle.standardError.write(Data("请输入整数。\n".utf8))
+            note = "请输入整数。"
         }
     }
 
     /// Blocks until the user presses Enter (or Esc, or Ctrl-C/Ctrl-D), so
     /// command output stays on screen long enough to read before the menu
     /// redraws over it. EOF just returns. The default message is the
-    /// canonical single-key bar `Enter 继续`, printed under a blank line so
-    /// the bottom spacing matches every other screen's shell.
+    /// canonical pause bar `Enter 继续 · Esc 返回` — the two keys it
+    /// answers to — printed under a blank line so the bottom spacing
+    /// matches every other screen's shell.
     ///
     /// Reads in cbreak mode rather than via cooked `readLine`: at a cooked
     /// prompt an impatient arrow-key press echoes its raw escape bytes (`^[[B`)
@@ -106,7 +153,7 @@ enum MenuPrompt {
     /// "captured" the keyboard. Falls back to a line read when stdin isn't a
     /// TTY.
     static func pause(_ terminal: Terminal, message: String? = nil) {
-        FileHandle.standardError.write(Data(("\n" + terminal.dimmed(message ?? terminal.keyBar([.enter("继续")]))).utf8))
+        FileHandle.standardError.write(Data(("\n" + terminal.dimmed(message ?? terminal.keyBar([.enter("继续"), .escape("返回")]))).utf8))
 
         // A key mashed while the action ran must not answer the pause.
         RawMode.discardPendingInput()

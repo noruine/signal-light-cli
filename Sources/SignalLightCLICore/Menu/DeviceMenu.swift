@@ -53,7 +53,7 @@ enum DeviceMenu {
     /// the list instantly.
     private static func renameDevice(paths: SignalLightDaemonPaths, terminal: Terminal) async {
         let current = (try? SignalLightDeviceStore.load(from: paths.deviceJSONURL))?.name
-        guard let name = MenuPrompt.text("新的蓝牙名称", default: current), !name.isEmpty else { return }
+        guard let name = MenuPrompt.text("新的蓝牙名称", default: current, terminal: terminal), !name.isEmpty else { return }
         guard name != current else {
             terminal.out("名称没有变化。")
             MenuPrompt.pause(terminal)
