@@ -14,6 +14,14 @@ struct DaemonPathsTests {
         #expect(paths.ownedSockets == [paths.bridgeSocketURL])
     }
 
+    @Test("The launchd label honors its sandbox override")
+    func launchAgentLabelOverride() {
+        #expect(SignalLightDaemonPaths.launchAgentLabel(environment: [:]) == "app.signal-light.daemon")
+        #expect(SignalLightDaemonPaths.launchAgentLabel(
+            environment: ["SIGNAL_LIGHT_LAUNCHD_LABEL": "app.signal-light.daemon.verify"]
+        ) == "app.signal-light.daemon.verify")
+    }
+
     @Test("Every inventory path stays in this tool's own namespace")
     func inventoryStaysInOwnNamespace() {
         let paths = SignalLightDaemonPaths(home: home)

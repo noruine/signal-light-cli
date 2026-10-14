@@ -35,7 +35,17 @@ public struct SignalLightDaemonPaths: Sendable {
         fileManager.homeDirectoryForCurrentUser
     }
 
-    public static let launchAgentLabel = "app.signal-light.daemon"
+    public static var launchAgentLabel: String {
+        launchAgentLabel(environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// The label lives in the per-user launchd domain, not under `$HOME`: a
+    /// sandboxed run with a fake home would otherwise boot out (or register
+    /// over) the real user's job. The override mirrors the hooks binary's
+    /// `SIGNAL_LIGHT_HOOKS_BINARY`, which exists for the same reason.
+    public static func launchAgentLabel(environment: [String: String]) -> String {
+        environment["SIGNAL_LIGHT_LAUNCHD_LABEL"] ?? "app.signal-light.daemon"
+    }
 
     public var cliRootDir: URL {
         home.appendingPathComponent(".signal-light", isDirectory: true)
