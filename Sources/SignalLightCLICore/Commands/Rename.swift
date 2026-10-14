@@ -21,21 +21,21 @@ struct Rename: AsyncParsableCommand {
             throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
         }
 
+        guard let newName = newName?.trimmingCharacters(in: .whitespaces), !newName.isEmpty else {
+            // Read-only: the local pairing record answers this — it is written
+            // at pair time and kept in sync by every rename (the menu's prompt
+            // has always read it from there). No need to pause the service
+            // and grab the single BLE slot just to look.
+            terminal.out("当前蓝牙名称：\(device.name)")
+            return
+        }
+
         let control = LaunchAgentControl(paths: paths)
         try await DaemonPause.run(terminal: terminal, control: control) {
             let session = SignalLightBLESession(pairedDeviceID: deviceID)
             terminal.progress("\(terminal.emoji(CLIGlyph.search))正在连接信号灯…")
             try await session.connect(onRetry: { terminal.progress("还没连上，正在重试…") })
             defer { session.disconnect() }
-
-            let currentName = (try? await session.getConfig())?.name
-            if let currentName {
-                terminal.out("当前蓝牙名称：\(currentName)")
-            }
-
-            guard let newName = newName?.trimmingCharacters(in: .whitespaces), !newName.isEmpty else {
-                return  // Read-only mode: nothing more to do.
-            }
 
             try await applyRename(newName, session: session, deviceID: deviceID, paths: paths, terminal: terminal)
         }
