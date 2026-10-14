@@ -27,6 +27,7 @@ enum InteractiveMenu {
         await MenuLoop.run(
             terminal: terminal,
             escapeHint: .escape("退出"),
+            refreshInterval: 1,
             context: {
                 let snapshot = StatusSnapshot.current(paths: paths)
                 var lines = snapshot.menuHeaderLines(terminal: terminal)

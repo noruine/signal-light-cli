@@ -21,8 +21,8 @@ enum DiagnosticsMenu {
                     MenuChoice("\(terminal.emoji(CLIGlyph.doctor))体检", crumb: "体检") {
                         await MenuCommandRunner.run(["doctor"], terminal: terminal)
                     },
-                    MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))查看当前状态", crumb: "查看当前状态") {
-                        await MenuCommandRunner.run(["status"], terminal: terminal)
+                    MenuChoice("\(terminal.emoji(CLIGlyph.trafficLight))查看当前状态", crumb: "查看当前状态", pausesAfter: false) {
+                        StatusMonitor.run(terminal: terminal)
                     },
                     MenuChoice("\(terminal.emoji(CLIGlyph.logs))查看最近日志", crumb: "查看最近日志") {
                         await MenuCommandRunner.run(["logs"], terminal: terminal)

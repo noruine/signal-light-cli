@@ -1,4 +1,5 @@
 import Darwin
+import Foundation
 
 /// A keyboard-driven single-choice picker: ↑/↓ (or vim j/k) move a highlight,
 /// Enter confirms, number keys 1–9 quick-select, q/Ctrl-C back out. It enters
@@ -20,7 +21,8 @@ enum MenuSelector {
         trail: [String]?,
         context: () -> [String],
         footerHint: String,
-        initialIndex: Int = 0
+        initialIndex: Int = 0,
+        refreshInterval: TimeInterval? = nil
     ) -> Outcome {
         guard !items.isEmpty else { return .quit }
 
@@ -39,9 +41,17 @@ enum MenuSelector {
         print("\u{1B}[2J", terminator: "")    // one full clear for a clean first paint
 
         var selected = min(max(initialIndex, 0), items.count - 1)
-        render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
+        var currentContext = context()
+        render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
         while true {
-            switch readKey() {
+            switch readKey(timeoutMilliseconds: refreshInterval.map { Int32($0 * 1000) }) {
+            case .refresh:
+                let updatedContext = context()
+                if updatedContext != currentContext {
+                    currentContext = updatedContext
+                    render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
+                }
+                continue
             case .up:
                 selected = (selected - 1 + items.count) % items.count
             case .down:
@@ -59,7 +69,8 @@ enum MenuSelector {
             case .other:
                 continue  // ignore mouse reports and other unrelated input
             }
-            render(items: items, selected: selected, terminal: terminal, trail: trail, context: context, footerHint: footerHint)
+            currentContext = context()
+            render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
         }
     }
 
@@ -92,10 +103,17 @@ enum MenuSelector {
     // MARK: - Key input
 
     private enum Key {
-        case up, down, enter, quit, number(Int), other
+        case up, down, enter, quit, number(Int), refresh, other
     }
 
-    private static func readKey() -> Key {
+    private static func readKey(timeoutMilliseconds: Int32?) -> Key {
+        if let timeoutMilliseconds {
+            var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+            let result = poll(&descriptor, 1, timeoutMilliseconds)
+            if result == 0 || (result < 0 && errno == EINTR) { return .refresh }
+            if result < 0 { return .other }
+        }
+
         var byte: UInt8 = 0
         guard read(STDIN_FILENO, &byte, 1) == 1 else { return .quit }  // EOF
 

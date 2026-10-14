@@ -45,17 +45,45 @@ struct MenuChromeTests {
         #expect(StatusSnapshot.menuHooksDescription(for: ["Claude Code", "Codex"]) == "Claude Code + Codex")
     }
 
-    @Test("Status lists per-session counts and the sessions driving the light")
+    @Test("Status lists per-session counts without naming a lamp driver")
     func statusSessionLines() {
         let sessions = [
             SessionRegistry.SessionStatus(source: .claude, sessionID: "12345678-abc", phase: .running),
             SessionRegistry.SessionStatus(source: .codex, sessionID: "abcdefgh-xyz", phase: .waitingForAnswer),
         ]
 
-        #expect(StatusSnapshot.sessionLines(sessions: sessions, bucket: "needsAnswer") == [
+        #expect(StatusSnapshot.sessionLines(sessions: sessions) == [
             "    会话      2 个：运行中 1、等待回答 1",
-            "    灯态主导  等待回答：Codex · abcdefgh…",
         ])
+    }
+
+    @Test("The interactive header shows the same session counts as status")
+    func menuHeaderSessionLines() {
+        let sessions = [
+            SessionRegistry.SessionStatus(source: .codex, sessionID: "working", phase: .running),
+            SessionRegistry.SessionStatus(source: .codex, sessionID: "other", phase: .idle),
+        ]
+        let snapshot = StatusSnapshot(
+            paths: SignalLightDaemonPaths(home: URL(fileURLWithPath: "/tmp")),
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: true, pid: 1),
+            runAtLoad: true,
+            toolInstalled: true,
+            state: SignalLightDaemonState(
+                ble: .connected,
+                deviceName: "blinkenlights",
+                currentBucket: "running",
+                sessions: sessions,
+                updatedAt: .now,
+                pid: 1
+            ),
+            stateIsLive: true,
+            pairedDeviceName: "blinkenlights",
+            deviceName: "blinkenlights",
+            hookedAgents: ["Codex"]
+        )
+
+        #expect(snapshot.menuHeaderLines(terminal: plain).last == "    会话      2 个：运行中 1、空闲 1")
+        #expect(!snapshot.menuHeaderLines(terminal: plain).joined().contains("灯态主导"))
     }
 
     @Test("The breadcrumb reads root, then the trail")

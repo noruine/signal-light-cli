@@ -228,6 +228,7 @@ enum MenuLoop {
         terminal: Terminal,
         page: String? = nil,
         escapeHint: KeyHint = .escape("返回"),
+        refreshInterval: TimeInterval? = nil,
         context: @escaping () -> [String],
         buildItems: () -> [MenuChoice]
     ) async {
@@ -238,7 +239,8 @@ enum MenuLoop {
                 terminal: terminal,
                 trail: page.map { [$0] } ?? [],
                 context: context,
-                footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint])
+                footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint]),
+                refreshInterval: refreshInterval
             )
             guard case let .selected(index) = outcome else { return }
 

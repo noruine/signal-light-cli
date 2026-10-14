@@ -102,42 +102,45 @@ struct StatusSnapshot {
     }
 
     func printHumanReadable(terminal: Terminal) {
+        for line in humanReadableLines(terminal: terminal, includeHeading: !CLIRuntimeContext.isMenuSession) {
+            terminal.out(line)
+        }
+    }
+
+    func humanReadableLines(terminal: Terminal, includeHeading: Bool) -> [String] {
+        var lines: [String] = []
         // Inside the menu the breadcrumb already names the screen; only a
         // bare `signal-light status` needs the product title of its own.
-        if !CLIRuntimeContext.isMenuSession {
-            terminal.out("\(terminal.emoji(CLIGlyph.trafficLight))信号灯")
-            terminal.out("")
+        if includeHeading {
+            lines.append("\(terminal.emoji(CLIGlyph.trafficLight))信号灯")
+            lines.append("")
         }
 
-        terminal.out("    服务      \(terminal.statusDot(serviceIsRunning)) \(serviceDescription)")
+        lines.append("    服务      \(terminal.statusDot(serviceIsRunning)) \(serviceDescription)")
 
-        terminal.out("    设备      \(terminal.statusDot(pairedDeviceName != nil)) \(deviceDescription)")
+        lines.append("    设备      \(terminal.statusDot(pairedDeviceName != nil)) \(deviceDescription)")
 
         // Only a snapshot with a live writer describes right now; a leftover
         // file keeps its stale fields out of the report entirely.
         if stateIsLive {
-            terminal.out("    蓝牙      \(terminal.statusDot(state?.ble == .connected)) \(bleDescription)")
+            lines.append("    蓝牙      \(terminal.statusDot(state?.ble == .connected)) \(bleDescription)")
             if let bucket = state?.currentBucket {
-                terminal.out("    当前状态  \(SignalLightBucketDisplay.name(forRaw: bucket))")
+                lines.append("    当前状态  \(SignalLightBucketDisplay.name(forRaw: bucket))")
             }
-            for line in Self.sessionLines(sessions: state?.sessions, bucket: state?.currentBucket) {
-                terminal.out(line)
-            }
+            lines.append(contentsOf: Self.sessionLines(sessions: state?.sessions))
         } else {
-            terminal.out("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
+            lines.append("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
         }
 
-        terminal.out("    日志      \(PathText.abbreviated(paths.logURL))")
+        lines.append("    日志      \(PathText.abbreviated(paths.logURL))")
+        return lines
     }
 
     static func sessionLines(
-        sessions: [SessionRegistry.SessionStatus]?,
-        bucket rawBucket: String?
+        sessions: [SessionRegistry.SessionStatus]?
     ) -> [String] {
         guard let sessions else { return ["    会话      尚未收到会话事件"] }
-        guard !sessions.isEmpty else {
-            return ["    会话      暂无会话记录", "    灯态主导  空闲（没有活动会话）"]
-        }
+        guard !sessions.isEmpty else { return ["    会话      暂无会话记录"] }
 
         let phases: [(SessionRegistry.Phase, String)] = [
             (.running, "运行中"),
@@ -150,25 +153,7 @@ struct StatusSnapshot {
             return count == 0 ? nil : "\(name) \(count)"
         }
         let countLine = "    会话      \(sessions.count) 个：\(counts.joined(separator: "、"))"
-
-        guard let bucket = rawBucket.flatMap(SignalLightBucket.init(rawValue:)), bucket != .idle else {
-            return [countLine, "    灯态主导  空闲（没有活动会话）"]
-        }
-        let phase: SessionRegistry.Phase = switch bucket {
-        case .idle: .idle
-        case .running: .running
-        case .needsApproval: .waitingForApproval
-        case .needsAnswer: .waitingForAnswer
-        }
-        let drivers = sessions.filter { $0.phase == phase }.map { session in
-            let agent = session.source == .claude ? "Claude Code" : "Codex"
-            let sessionID = String(session.sessionID.prefix(8)) + (session.sessionID.count > 8 ? "…" : "")
-            return "\(agent) · \(sessionID)"
-        }
-        let driverLine = drivers.isEmpty
-            ? "    灯态主导  \(SignalLightBucketDisplay.name(bucket))"
-            : "    灯态主导  \(SignalLightBucketDisplay.name(bucket))：\(drivers.joined(separator: "、"))"
-        return [countLine, driverLine]
+        return [countLine]
     }
 
     /// One compact line for the interactive menu's header: service state, the
@@ -187,6 +172,7 @@ struct StatusSnapshot {
                 "当前状态 \(menuBucketDescription)",
             ]
             lines.append("    " + light.joined(separator: "   "))
+            lines.append(contentsOf: Self.sessionLines(sessions: state?.sessions))
         }
         return lines
     }
