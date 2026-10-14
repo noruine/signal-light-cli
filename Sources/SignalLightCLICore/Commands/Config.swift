@@ -181,7 +181,7 @@ private enum ConfigToggle {
 private enum ConfigReloadNotice {
     static func emit(terminal: Terminal, paths: SignalLightDaemonPaths) {
         if DaemonReload.reloadIfRunning(paths: paths) {
-            terminal.progress("已通知服务，马上生效。")
+            terminal.progress("已通知服务，立即生效。")
         } else {
             terminal.progress("已保存，服务下次启动时生效。")
         }

@@ -182,7 +182,7 @@ struct Firmware: AsyncParsableCommand {
                 // image and is verifying it, so Ctrl-C only gets a note.
                 try await runWhileAnsweringInterruptKeys(
                     terminal: terminal,
-                    note: "正在提交，不能中断；马上完成。"
+                    note: "正在提交，不能中断；即将完成。"
                 ) {
                     terminal.progress("正在校验并提交…")
                     try await session.sendControl("OTA_END")

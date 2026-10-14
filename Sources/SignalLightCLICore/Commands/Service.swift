@@ -151,7 +151,7 @@ struct Service: AsyncParsableCommand {
         struct Disable: AsyncParsableCommand {
             static let configuration = CommandConfiguration(
                 commandName: "disable",
-                abstract: "关掉开机自启（不会立刻停掉服务）。"
+                abstract: "关掉开机自启（不会立即停掉服务）。"
             )
 
             @OptionGroup var globals: GlobalOptions
