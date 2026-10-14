@@ -303,6 +303,34 @@ struct HookIsolationTests {
         #expect(try String(contentsOf: marker, encoding: .utf8) == "keep")
     }
 
+    @Test("Configuration backups retain only the latest managed copy")
+    func repeatedBackupsKeepLatestCopy() throws {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sl-test-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let settings = scratch.appendingPathComponent("settings.json")
+        let unrelatedBackup = scratch.appendingPathComponent("settings.json.backup.manual")
+        try Data("keep this file".utf8).write(to: unrelatedBackup)
+        let firstContents = Data("first version".utf8)
+        try firstContents.write(to: settings)
+        let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let maybeFirstBackup = try HookConfigurationBackup.createCopy(from: settings, at: timestamp)
+        let firstBackup = try #require(maybeFirstBackup)
+        #expect(FileManager.default.fileExists(atPath: firstBackup.path))
+
+        let secondContents = Data("second version".utf8)
+        try secondContents.write(to: settings)
+        let maybeSecondBackup = try HookConfigurationBackup.createCopy(from: settings, at: timestamp)
+        let secondBackup = try #require(maybeSecondBackup)
+
+        #expect(firstBackup != secondBackup)
+        #expect(!FileManager.default.fileExists(atPath: firstBackup.path))
+        #expect(try Data(contentsOf: secondBackup) == secondContents)
+        #expect(try Data(contentsOf: unrelatedBackup) == Data("keep this file".utf8))
+    }
+
     @Test("Uninstall finds managed hooks when the install manifest is missing")
     func uninstallFindsHooksWithoutManifest() throws {
         let scratch = FileManager.default.temporaryDirectory
