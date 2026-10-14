@@ -33,6 +33,7 @@ enum PairFlow {
         device: String?,
         first: Bool
     ) async throws {
+        try validateTimeout(timeout)
         let log = RestrainedLog(url: paths.logURL)
         // Breadcrumbs are menu chrome: inside the menu the result screen
         // already prints it (and the picker continues that trail); a bare
@@ -97,6 +98,12 @@ enum PairFlow {
                 cli: "    服务还没启动：运行 signal-light service start",
                 menu: "    服务还没启动。"
             ))
+        }
+    }
+
+    static func validateTimeout(_ timeout: TimeInterval) throws {
+        guard timeout.isFinite, timeout > 0 else {
+            throw CLIError("扫描超时必须是大于 0 的有限秒数。", exitCode: .usage)
         }
     }
 
