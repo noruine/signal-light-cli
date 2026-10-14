@@ -35,7 +35,7 @@ signal-light                # 不带参数进交互菜单
 | `config` | 各状态的灯效、全局亮度、总开关 |
 | `calibrate` | 接线校准：逐个点亮引脚，记下红/黄/绿接在哪 |
 | `firmware check\|update` | 检查新固件 / OTA 升级（升级中按 Ctrl-C 可取消） |
-| `rename` | 改灯的蓝牙广播名称 |
+| `rename` | 查看或修改灯的蓝牙广播名称（不带参数只看本机记录） |
 | `status` / `logs` / `doctor` / `audit` | 状态、日志、体检、文件清单 |
 
 ## 灯的表现
@@ -72,7 +72,7 @@ Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ �
 ```
 
 - `Sources/SignalLightKit` — 产品核心：BLE 会话、灯效与设置、会话状态机、钩子协议（`Bridge/`）、Agent 安装器。
-- `Sources/SignalLightCLICore` — 命令与交互菜单；`run` 子命令即守护进程本体。`Sources/SignalLightCLI` 是只含 `@main` 的薄入口（拆出来是为了测试目标能 import 核心模块）。
+- `Sources/SignalLightCLICore` — 命令与交互菜单；`run` 子命令即守护进程本体；`Sources/SignalLightCLI` 是只含 `@main` 的薄入口。
 - `Sources/SignalLightHooks` — 单文件转发程序，做完就退出，不阻塞 Agent。
 - 钩子协议与状态映射：[docs/bridge.md](docs/bridge.md)。
 
@@ -83,19 +83,15 @@ Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ �
 | 程序与数据 | `~/.signal-light/`（`bin/`、`device.json`、`settings.json`、`state.json`、日志） |
 | 命令 | `~/.local/bin/signal-light` |
 | launchd | `~/Library/LaunchAgents/app.signal-light.daemon.plist` |
-| 钩子 socket | `~/Library/Application Support/SignalLight/bridge.sock` |
+| 钩子 socket | `~/.signal-light/bridge.sock` |
 
 ## 开发
 
-```bash
-make help                  # build / install / test / lint / format / clean
-scripts/test.sh            # 跑测试；只装 CommandLineTools 的机器也能跑
-scripts/check-cli-copy.sh  # 文案检查：输出不带"了"（不了/为了/除了 除外）
-```
+构建、测试、格式化和检查都在 `make` 里（`make help` 列全部入口）；只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`）。模块划分、文案规则与工作约定见 [AGENTS.md](AGENTS.md)。
 
 版本号放在仓库根的 `VERSION` 文件，`signal-light --version` 和升级提示都按它显示；判断"有没有新代码"比对的是源码内容哈希，未提交的改动也算数。
 
-CI 在每次 push 时跑构建 + 测试 + SwiftFormat/SwiftLint + 文案检查。
+CI 在每次 push 时跑构建、测试、格式/lint 与文案检查（`.github/workflows/ci.yml`）。
 
 > `swift build` 报 `Could not initialize build system … Unknown error parsing property list` 时：从 Command Line Tools 27.0（Swift 6.4）起，SwiftPM 的默认构建引擎在没装完整 Xcode 的机器上会这样失败；加 `--build-system native` 用回备用引擎即可（会打一条 deprecation 警告，忽略）。装好完整 Xcode 后 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`，`swift test` 也才能直接跑。
 

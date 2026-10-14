@@ -36,6 +36,9 @@ because an agent once paired with the wrong one.
 - `Sources/SignalLightHooks` — fire-and-forget forwarder, one file.
 - `Tests/SignalLightKitTests` — Swift Testing. Cover the key behavior (state
   machine, protocol round trip, mappings, stores), never chase percentages.
+- `Tests/SignalLightCLITests` — the interactive chrome and copy wording (key
+  bars, `ScreenLayout` frames, the header segments) plus the session retry
+  policy.
 - `docs/bridge.md` — the socket protocol and the phase mapping. Changing either
   side means changing the doc.
 
@@ -49,6 +52,10 @@ hardware.
 - Do not `service stop`, `service restart` or `unpair` while testing.
 - `make install`, `upgrade` and `sign` restart a running service by design; do not
   invoke them from automated checks or unrelated testing.
+- A fake-`$HOME` run still shares the real per-user launchd label: set
+  `SIGNAL_LIGHT_LAUNCHD_LABEL` to a value of its own in sandboxed checks, or a
+  fake uninstall/stop boots out the real service. `SIGNAL_LIGHT_HOOKS_BINARY`
+  scopes the hooks binary for the same reason.
 - If a process is killed mid-operation the daemon can be left stopped: restore
   it with `signal-light service start` and tell the user.
 - Hardware-free end-to-end check, with the daemon running:
@@ -67,8 +74,11 @@ hardware.
   types; `@unchecked Sendable` needs a stated reason — a named lock, queue
   or actor, or a stored type that is itself thread-safe.
 - User-facing copy is standard, natural Chinese; the 了 particle is banned
-  outside 不了 / 为了 / 除了 (`make lint` enforces it). One vocabulary for
-  results: 已X for a finished action, X完成 for a finished flow, X失败 for a
+  outside 不了 / 为了 / 除了, and `scripts/check-cli-copy.sh` (part of
+  `make lint`) pins the rest: written register over spoken, the one key
+  vocabulary (Enter / Space / ↑/↓ / Esc), operation headlines that carry
+  their glyph, and no promises of actions that cannot happen. One vocabulary
+  for results: 已X for a finished action, X完成 for a finished flow, X失败 for a
   failed one, 无法X for an environment limit, 已取消X for a cancel. Backing
   out of a yes/no question says nothing — the answer is the statement; a
   cancel that interrupts running work says its one line and returns. Only
