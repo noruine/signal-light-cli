@@ -55,13 +55,37 @@ public enum SignalLightSettingsStore {
             return .default
         }
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(SignalLightSettings.self, from: data)
+        let settings = try JSONDecoder().decode(SignalLightSettings.self, from: data)
+        try validate(settings)
+        return settings
     }
 
     public static func save(_ settings: SignalLightSettings, to url: URL, fileManager: FileManager = .default) throws {
+        try validate(settings)
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(settings).write(to: url, options: .atomic)
+    }
+
+    private static func validate(_ settings: SignalLightSettings) throws {
+        for (bucket, effect) in settings.effects {
+            guard !effect.colors.isEmpty,
+                  effect.intervalMs >= 0,
+                  effect.type == .solid || effect.intervalMs > 0 else {
+                throw SignalLightSettingsError.invalidEffect(bucket)
+            }
+        }
+    }
+}
+
+public enum SignalLightSettingsError: Error, LocalizedError, Equatable {
+    case invalidEffect(SignalLightBucket)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidEffect(bucket):
+            "The \(bucket.rawValue) light effect has no colors or an invalid interval."
+        }
     }
 }
