@@ -9,6 +9,16 @@ daemon, and a hook forwarder that turns Claude Code / Codex session state into
 light colors. A neighbor's light may be in range — the safety rules below exist
 because an agent once paired with the wrong one.
 
+## Documentation ownership
+
+- `README.md` is for users: installation, commands, behavior and hardware notes.
+- This file is for contributors: code layout, invariants, validation and Git rules.
+- `docs/bridge.md` defines the hook socket protocol and phase mapping; update it
+  when either side changes.
+- Keep implementation details and contributor workflow out of the README. Keep
+  user setup and command explanations in the README instead of duplicating them
+  here.
+
 ## Commands
 
 | Task | Command |
@@ -39,8 +49,6 @@ because an agent once paired with the wrong one.
 - `Tests/SignalLightCLITests` — the interactive chrome and copy wording (key
   bars, `ScreenLayout` frames, the header segments) plus the session retry
   policy.
-- `docs/bridge.md` — the socket protocol and the phase mapping. Changing either
-  side means changing the doc.
 
 ## Hardware safety
 

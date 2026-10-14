@@ -5,7 +5,7 @@
 
 - **两个可执行文件**：`signal-light`（CLI + 守护进程）、`agent-hooks`（Agent 钩子转发）。
 - **一个库**：`SignalLightKit`（BLE、灯效模型、会话状态、钩子协议）。
-- **没有 UI，也不接管审批**：权限弹窗和提问留在 Agent 自己的终端里，灯只做提示。
+- **不需要图形界面，也不接管审批**：权限请求和提问留在 Agent 自己的终端里，灯只做提示。
 
 ## 快速开始
 
@@ -47,7 +47,7 @@ signal-light                # 不带参数进交互菜单
 | 🙋 等待审批 | 黄红呼吸 | Agent 请求权限 |
 | ❓ 等待回答 | 黄绿呼吸 | Agent 提问等你选 |
 
-多个会话同时在跑时：**等待你处理的 > 正在运行的 > 空闲**。灯效都能在 `signal-light` 的 🎨 灯效设置或 `config` 里改。
+多个会话同时在跑时：**等待审批 > 等待回答 > 运行中 > 空闲**。灯效可在菜单的灯效设置或 `config` 里修改。
 
 ## Agent hooks
 
@@ -62,20 +62,6 @@ signal-light                # 不带参数进交互菜单
 - **Codex 需要手动信任一次**：装完后在 Codex 里运行 `/hooks` 确认信任，钩子才会运行。
 - 审批和提问照常在 Agent 的终端里回答；hook 与弹窗并行，灯只提示、不拦截。
 
-## 架构
-
-```
-Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ 守护进程
-                                                              │  SessionRegistry
-                                                              ▼
-                                                        灯效（BLE）
-```
-
-- `Sources/SignalLightKit` — 产品核心：BLE 会话、灯效与设置、会话状态机、钩子协议（`Bridge/`）、Agent 安装器。
-- `Sources/SignalLightCLICore` — 命令与交互菜单；`run` 子命令即守护进程本体；`Sources/SignalLightCLI` 是只含 `@main` 的薄入口。
-- `Sources/SignalLightHooks` — 单文件转发程序，做完就退出，不阻塞 Agent。
-- 钩子协议与状态映射：[docs/bridge.md](docs/bridge.md)。
-
 ## 磁盘布局
 
 | 内容 | 位置 |
@@ -85,15 +71,9 @@ Agent 钩子 ──stdin JSON──▶ agent-hooks ──Unix socket──▶ �
 | launchd | `~/Library/LaunchAgents/app.signal-light.daemon.plist` |
 | 钩子 socket | `~/.signal-light/bridge.sock` |
 
-## 开发
+## 从源码构建
 
-构建、测试、格式化和检查都在 `make` 里（`make help` 列全部入口）；只装 CommandLineTools 的机器用 `make` 即可（它带上 `--build-system native`）。模块划分、文案规则与工作约定见 [AGENTS.md](AGENTS.md)。
-
-版本号放在仓库根的 `VERSION` 文件，`signal-light --version` 和升级提示都按它显示；判断"有没有新代码"比对的是源码内容哈希，未提交的改动也算数。
-
-CI 在每次 push 时跑构建、测试、格式/lint 与文案检查（`.github/workflows/ci.yml`）。
-
-> `swift build` 报 `Could not initialize build system … Unknown error parsing property list` 时：从 Command Line Tools 27.0（Swift 6.4）起，SwiftPM 的默认构建引擎在没装完整 Xcode 的机器上会这样失败；加 `--build-system native` 用回备用引擎即可（会打一条 deprecation 警告，忽略）。装好完整 Xcode 后 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`，`swift test` 也才能直接跑。
+`make build` 构建，`make test` 运行测试，`make lint` 检查格式、规则和 CLI 文案；后者需要安装 `swiftformat` 与 `swiftlint`。`make help` 列出全部入口。模块边界、开发约定和验证规则见 [AGENTS.md](AGENTS.md)。
 
 ## 固件
 
