@@ -79,7 +79,9 @@ public enum CodexHookInstaller {
     // stuck on running. Codex supports PreToolUse/PostToolUse and the
     // compaction/subagent events too, but the light doesn't consume them.
     private static let eventSpecs: [(name: String, matcher: String?, timeout: Int?)] = [
-        ("SessionStart", "startup|resume|clear|compact", managedTimeout),
+        // `compact` fires mid-turn before Codex immediately continues. Treating
+        // it as a new idle session would hide work until the turn ends.
+        ("SessionStart", "startup|resume|clear", managedTimeout),
         ("UserPromptSubmit", nil, managedTimeout),
         ("PermissionRequest", nil, managedInteractiveTimeout),
         ("Stop", nil, managedTimeout),

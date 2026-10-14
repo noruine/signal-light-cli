@@ -49,7 +49,10 @@ Agent 原始格式——两个 Agent 的差异只存在于转发程序里。
 | Agent | 事件 |
 | --- | --- |
 | Claude Code | `SessionStart` `UserPromptSubmit` `PermissionRequest` `Stop` `StopFailure` `SessionEnd` |
-| Codex | `SessionStart`（覆盖 startup/resume/clear/compact）`UserPromptSubmit` `PermissionRequest` `Stop` `SessionEnd` `Interrupt` |
+| Codex | `SessionStart`（覆盖 startup/resume/clear）`UserPromptSubmit` `PermissionRequest` `Stop` `SessionEnd` `Interrupt` |
+
+Codex 的 `compact` 会在一轮工作中触发；压缩完成后会立即继续当前轮次，
+因此不把它当作新的空闲会话处理。
 
 - 转发程序不向 stdout 写任何内容，因此不会替 Agent 做决定：审批与提问仍由
   Agent 自己的界面处理。

@@ -103,6 +103,23 @@ struct HookIsolationTests {
         #expect(!commands.contains(managedCommand))
     }
 
+    @Test("Codex compaction does not reset a running session")
+    func codexSessionStartMatcherExcludesCompaction() throws {
+        let installed = try CodexHookInstaller.installHooksJSON(
+            existingData: nil,
+            hookCommand: managedCommand
+        )
+        let contents = try #require(installed.contents)
+        let object = try JSONSerialization.jsonObject(with: contents)
+        let root = try #require(object as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let groups = try #require(hooks["SessionStart"] as? [[String: Any]])
+        let matcher = try #require(groups.first?["matcher"] as? String)
+
+        #expect(matcher == "startup|resume|clear")
+        #expect(!matcher.contains("compact"))
+    }
+
     @Test("Codex uninstall without our hooks leaves the file byte-for-byte alone")
     func codexUninstallNoOpLeavesForeignFileUntouched() throws {
         let existing = try foreignSettingsJSON()
