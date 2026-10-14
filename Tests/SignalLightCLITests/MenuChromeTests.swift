@@ -56,7 +56,7 @@ struct MenuChromeTests {
             "    会话      2 个：运行中 1、等待回答 1",
         ])
         #expect(StatusSnapshot.menuSessionLines(sessions: sessions) == [
-            "会话  2 个（运行中 1、等待回答 1）",
+            "会话      2 个（运行中 1、等待回答 1）",
         ])
     }
 
@@ -85,13 +85,19 @@ struct MenuChromeTests {
             hookedAgents: ["Codex"]
         )
 
-        #expect(snapshot.menuHeaderLines(terminal: plain).last == "会话  2 个（运行中 1、空闲 1）")
+        #expect(snapshot.menuHeaderLines(terminal: plain) == [
+            "    服务      [on] 运行中 · 自启开",
+            "    Hooks     [on] Codex",
+            "    蓝牙      [on] blinkenlights",
+            "    当前状态  🏃运行中",
+            "    会话      2 个（运行中 1、空闲 1）",
+        ])
         #expect(!snapshot.menuHeaderLines(terminal: plain).joined().contains("灯态主导"))
         #expect(snapshot.humanReadableLines(
             terminal: plain,
             includeHeading: false,
             sessionSummaryStyle: .menu
-        ).contains("会话  2 个（运行中 1、空闲 1）"))
+        ).contains("会话      2 个（运行中 1、空闲 1）"))
     }
 
     @Test("The breadcrumb reads root, then the trail")

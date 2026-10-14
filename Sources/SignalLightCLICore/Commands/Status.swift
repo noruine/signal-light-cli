@@ -159,10 +159,10 @@ struct StatusSnapshot {
     }
 
     static func menuSessionLines(sessions: [SessionRegistry.SessionStatus]?) -> [String] {
-        guard let summary = sessionSummary(sessions) else { return ["会话  尚未收到事件"] }
-        guard !summary.counts.isEmpty else { return ["会话  暂无记录"] }
+        guard let summary = sessionSummary(sessions) else { return ["会话      尚未收到事件"] }
+        guard !summary.counts.isEmpty else { return ["会话      暂无记录"] }
 
-        return ["会话  \(summary.total) 个（\(summary.counts.joined(separator: "、"))）"]
+        return ["会话      \(summary.total) 个（\(summary.counts.joined(separator: "、"))）"]
     }
 
     private static func sessionSummary(
@@ -186,19 +186,14 @@ struct StatusSnapshot {
     /// bluetooth link, and which bucket the light is showing right now. The
     /// log path and PIDs belong to `status`, not a menu header.
     func menuHeaderLines(terminal: Terminal) -> [String] {
-        // Two lines keep the four facts scannable: the setup that decides
-        // whether the light will react at all (service, agent hooks), then
-        // the light's own face (link, what it is showing).
-        var setup = ["服务 \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)"]
-        setup.append("Hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
-        var lines = ["    " + setup.joined(separator: "   ")]
+        var lines = [
+            "    服务      \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)",
+            "    Hooks     \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)",
+        ]
         if stateIsLive {
-            let light = [
-                "蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)",
-                "当前状态 \(menuBucketDescription)",
-            ]
-            lines.append("    " + light.joined(separator: "   "))
-            lines.append(contentsOf: Self.menuSessionLines(sessions: state?.sessions))
+            lines.append("    蓝牙      \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)")
+            lines.append("    当前状态  \(menuBucketDescription)")
+            lines.append(contentsOf: Self.menuSessionLines(sessions: state?.sessions).map { "    \($0)" })
         }
         return lines
     }

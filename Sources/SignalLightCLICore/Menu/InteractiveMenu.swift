@@ -14,16 +14,6 @@ enum InteractiveMenu {
     static func run(terminal: Terminal) async {
         let paths = SignalLightDaemonPaths.current()
 
-        // A full-screen control panel borrows the alternate screen, like
-        // vim/less/fzf do: whatever the terminal was showing stays put and
-        // comes back untouched when the menu quits. (A [2J on launch used to
-        // wipe the visible screen for good, and quitting emptied it again.)
-        // Menu output is read in the moment through the pauses; the
-        // scrollback belongs to the user.
-        print("\u{1B}[?1049h", terminator: "")
-        fflush(stdout)
-        RawMode.noteAlternateScreen(true)
-
         await MenuLoop.run(
             terminal: terminal,
             escapeHint: .escape("退出"),
@@ -42,12 +32,8 @@ enum InteractiveMenu {
                 return buildItems(state: state, snapshot: snapshot, paths: paths, terminal: terminal)
             }
         )
-        // Hand the terminal back exactly as it was: the restore is instant,
-        // so a slow shell-prompt redraw can't read as "Esc did nothing", and
-        // nothing of the user's is lost.
-        print("\u{1B}[?1049l", terminator: "")
-        fflush(stdout)
-        RawMode.noteAlternateScreen(false)
+        // Stay in the normal screen buffer so wheel scrolling navigates
+        // terminal scrollback instead of becoming arrow-key input.
     }
 
     /// One-line "here's where you are" nudge shown above the list until the
