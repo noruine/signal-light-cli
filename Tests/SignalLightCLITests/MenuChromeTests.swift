@@ -31,6 +31,13 @@ struct MenuChromeTests {
             == "↑/↓ 移动 · Space 勾选 · Enter 确认 · Esc 返回")
     }
 
+    @Test("A new step starts on a clean screen")
+    func beginStepClearsTheFrame() {
+        var emitted: [String] = []
+        ScreenLayout.beginStep(emit: { emitted.append($0) })
+        #expect(emitted == ["\u{1B}[2J\u{1B}[H"])
+    }
+
     @Test("The breadcrumb reads root, then the trail")
     func breadcrumbTrail() {
         #expect(plain.menuBreadcrumb() == "信号灯")

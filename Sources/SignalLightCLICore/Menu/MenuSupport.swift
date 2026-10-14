@@ -200,8 +200,7 @@ enum MenuLoop {
             // redraws, but the *action's* own output would otherwise pile up
             // under the previous step's — fine for a one-shot command, cramped
             // in a session that keeps going.
-            print("\u{1B}[2J\u{1B}[H", terminator: "")
-            fflush(stdout)
+            ScreenLayout.beginStep()
             // The frame follows the action onto its result screen: same
             // breadcrumb, one segment deeper, so output never floats without
             // a place.

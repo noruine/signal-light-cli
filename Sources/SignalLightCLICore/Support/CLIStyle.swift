@@ -103,6 +103,15 @@ public enum ScreenLayout {
         fflush(stdout)
     }
 
+    /// Retires the finished step's frame so the next one starts from a clean
+    /// screen — menu chrome only: in a session that keeps going, a stale frame
+    /// would otherwise sit under the next step and read as current. Bare CLI
+    /// runs never clear; their scrollback is the record.
+    public static func beginStep(emit: (String) -> Void = { print($0, terminator: "") }) {
+        emit("\u{1B}[2J\u{1B}[H")
+        fflush(stdout)
+    }
+
     public static func lines(
         terminal: Terminal,
         trail: [String]?,

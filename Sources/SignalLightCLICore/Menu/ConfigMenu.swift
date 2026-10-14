@@ -54,7 +54,8 @@ enum ConfigMenu {
         var interval = 0
         if type != .solid {
             let fallbackInterval = current.intervalMs > 0 ? current.intervalMs : 1000
-            terminal.out("")
+            // The answered picker must not sit under the next step.
+            ScreenLayout.beginStep()
             guard let value = MenuPrompt.integer("变化快慢（毫秒，数字越小越快）", default: fallbackInterval) else { return }
             interval = value
         }
@@ -134,7 +135,10 @@ enum ConfigMenu {
               let deviceID = UUID(uuidString: device.identifier) else {
             return
         }
+        // The question owns its screen, and so does the preview it launches.
+        ScreenLayout.beginStep()
         guard Confirm.promptYesNo(terminal, "先试试这个效果？", defaultAnswer: false) else { return }
+        ScreenLayout.beginStep()
 
         let control = LaunchAgentControl(paths: paths)
         do {
