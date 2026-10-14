@@ -42,11 +42,17 @@ struct Audit: AsyncParsableCommand {
         terminal.out(terminal.dimmed("● 存在，○ 不存在；装机状态下都属正常。"))
         terminal.out("")
 
+        // Whether the daemon is up decides how to read a live bridge socket:
+        // held by our own service is the normal running state; held while
+        // the service is down, it is somebody else's listener.
+        let daemonIsRunning = jobInfo.isLoaded && jobInfo.pid != nil
+
         for path in paths.ownedFiles + paths.ownedSockets {
-            // A socket with a live listener is not this CLI's residue — some
-            // other program is using it, and cleanup correctly left it alone.
+            // A socket with a live listener is not this CLI's residue —
+            // cleanup correctly leaves it alone.
             if liveSocketPaths.contains(path.path) {
-                terminal.out("● \(PathText.abbreviated(path))（正在被别的程序使用）")
+                let holder = daemonIsRunning ? "后台服务在用" : "正在被别的程序使用"
+                terminal.out("● \(PathText.abbreviated(path))（\(holder)）")
                 continue
             }
             // An inventory path somebody else occupies (a directory where one
