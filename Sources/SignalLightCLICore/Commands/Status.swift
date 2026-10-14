@@ -130,13 +130,20 @@ struct StatusSnapshot {
     /// bluetooth link, and which bucket the light is showing right now. The
     /// log path and PIDs belong to `status`, not a menu header.
     func menuHeaderLines(terminal: Terminal) -> [String] {
-        var segments = ["服务 \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)"]
+        // Two lines keep the four facts scannable: the setup that decides
+        // whether the light will react at all (service, agent hooks), then
+        // the light's own face (link, what it is showing).
+        var setup = ["服务 \(terminal.statusDot(serviceIsRunning)) \(menuServiceDescription)"]
+        setup.append("hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
+        var lines = ["    " + setup.joined(separator: "   ")]
         if stateIsLive {
-            segments.append("蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)")
-            segments.append("当前 \(menuBucketDescription)")
+            let light = [
+                "蓝牙 \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)",
+                "当前 \(menuBucketDescription)",
+            ]
+            lines.append("    " + light.joined(separator: "   "))
         }
-        segments.append("hooks \(terminal.statusDot(!hookedAgents.isEmpty)) \(menuHooksDescription)")
-        return ["    " + segments.joined(separator: "   ")]
+        return lines
     }
 
     var menuServiceDescription: String {
@@ -170,12 +177,12 @@ struct StatusSnapshot {
         }
     }
 
+    /// `😴空闲` when the daemon hasn't recorded a bucket yet: a fresh daemon
+    /// is already driving the idle effect, so that is the truth — a bare dash
+    /// only confused.
     private var menuBucketDescription: String {
-        guard let bucket = state?.currentBucket,
-              let parsed = SignalLightBucket(rawValue: bucket) else {
-            return "—"
-        }
-        return "\(SignalLightBucketDisplay.emoji(parsed))\(SignalLightBucketDisplay.name(parsed))"
+        let bucket = state?.currentBucket.flatMap(SignalLightBucket.init(rawValue:)) ?? .idle
+        return "\(SignalLightBucketDisplay.emoji(bucket))\(SignalLightBucketDisplay.name(bucket))"
     }
 
     /// `codex`, `claude + codex`, or `未接入` — which agents' hooks are in,
