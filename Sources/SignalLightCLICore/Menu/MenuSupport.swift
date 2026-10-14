@@ -215,10 +215,9 @@ struct MenuLineBuffer {
         bytes = Array(decoded.dropLast().utf8)
         let scalars = Array(character.unicodeScalars)
         if scalars.contains(where: { $0.value == 0x200D }) { return 2 }
+        if scalars.filter({ (0x1F1E6...0x1F1FF).contains($0.value) }).count == 2 { return 2 }
 
-        let width = scalars.reduce(into: 0) { result, scalar in
-            result += Self.scalarWidth(scalar)
-        }
+        let width = scalars.map(Self.scalarWidth).max() ?? 0
         let displayWidth = scalars.contains(where: { $0.value == 0xFE0F }) ? max(2, width) : width
         return Int(max(1, displayWidth))
     }

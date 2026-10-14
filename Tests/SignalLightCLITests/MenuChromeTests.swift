@@ -46,6 +46,13 @@ struct MenuChromeTests {
         }
         #expect(buffer.deleteLastCharacter() == 2)
         #expect(buffer.value == "灯")
+        for byte in "🇨🇳👍🏽".utf8 {
+            buffer.append(byte)
+        }
+        #expect(buffer.deleteLastCharacter() == 2)
+        #expect(buffer.value == "灯🇨🇳")
+        #expect(buffer.deleteLastCharacter() == 2)
+        #expect(buffer.value == "灯")
         #expect(buffer.deleteLastCharacter() == 2)
         #expect(buffer.value.isEmpty)
         #expect(buffer.deleteLastCharacter() == 0)
