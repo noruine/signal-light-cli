@@ -31,6 +31,26 @@ struct MenuChromeTests {
             == "↑/↓ 移动 · Space 勾选 · Enter 确认 · Esc 返回")
     }
 
+    @Test("Line editor backspace removes one Unicode character")
+    func lineBufferBackspace() {
+        var buffer = MenuLineBuffer()
+        for byte in "灯名".utf8 {
+            buffer.append(byte)
+        }
+
+        #expect(buffer.deleteLastCharacter() == 2)
+        #expect(buffer.value == "灯")
+
+        for byte in "👩‍💻".utf8 {
+            buffer.append(byte)
+        }
+        #expect(buffer.deleteLastCharacter() == 2)
+        #expect(buffer.value == "灯")
+        #expect(buffer.deleteLastCharacter() == 2)
+        #expect(buffer.value.isEmpty)
+        #expect(buffer.deleteLastCharacter() == 0)
+    }
+
     @Test("A new step starts on a clean screen")
     func beginStepClearsTheFrame() {
         var emitted: [String] = []

@@ -35,7 +35,7 @@ enum MenuPrompt {
     /// and Backspace from wherever the cursor sits; Enter ends the line and
     /// returns it, Esc / Ctrl-C / Ctrl-D / EOF end it as `nil`.
     private static func editLineBytes() -> String? {
-        var buffer: [UInt8] = []
+        var buffer = MenuLineBuffer()
         while true {
             var byte: UInt8 = 0
             guard read(STDIN_FILENO, &byte, 1) == 1 else { writeStderr("\n"); return nil }
@@ -43,14 +43,14 @@ enum MenuPrompt {
             switch byte {
             case 0x0A, 0x0D:  // Enter
                 writeStderr("\n")
-                return String(decoding: buffer, as: UTF8.self).trimmingCharacters(in: .whitespaces)
+                return buffer.value.trimmingCharacters(in: .whitespaces)
             case 0x03, 0x04:  // Ctrl-C, Ctrl-D
                 writeStderr("\n")
                 return nil
             case 0x7F, 0x08:  // Backspace / Delete
-                if !buffer.isEmpty {
-                    buffer.removeLast()
-                    writeStderr("\u{8} \u{8}")  // erase last glyph on screen
+                let columns = buffer.deleteLastCharacter()
+                if columns > 0 {
+                    writeStderr(String(repeating: "\u{8} \u{8}", count: columns))
                 }
             case 0x1B:  // Esc — cancel, unless it's the lead byte of an arrow/CSI sequence
                 if case .lone = RawMode.classifyEscape() {
@@ -180,6 +180,53 @@ enum MenuPrompt {
                 continue  // discard arrow keys and any other keypress
             }
         }
+    }
+}
+
+/// Stores the bytes echoed by the line editor and removes whole Unicode
+/// characters when Backspace is pressed, even though input arrives by byte.
+struct MenuLineBuffer {
+    private static let wideRanges: [ClosedRange<UInt32>] = [
+        0x1100...0x115F, 0x2329...0x232A, 0x2E80...0xA4CF,
+        0xAC00...0xD7A3, 0xF900...0xFAFF, 0xFE10...0xFE19,
+        0xFE30...0xFE6F, 0xFF00...0xFF60, 0xFFE0...0xFFE6,
+        0x1F300...0x1FAFF, 0x20000...0x3FFFD,
+    ]
+
+    private var bytes: [UInt8] = []
+
+    var value: String {
+        String(decoding: bytes, as: UTF8.self)
+    }
+
+    mutating func append(_ byte: UInt8) {
+        bytes.append(byte)
+    }
+
+    /// Removes one extended grapheme cluster and returns its terminal width.
+    /// An incomplete UTF-8 sequence is reduced one byte at a time.
+    mutating func deleteLastCharacter() -> Int {
+        guard let decoded = String(bytes: bytes, encoding: .utf8), let character = decoded.last else {
+            guard !bytes.isEmpty else { return 0 }
+            bytes.removeLast()
+            return 1
+        }
+
+        bytes = Array(decoded.dropLast().utf8)
+        let scalars = Array(character.unicodeScalars)
+        if scalars.contains(where: { $0.value == 0x200D }) { return 2 }
+
+        let width = scalars.reduce(into: 0) { result, scalar in
+            result += Self.scalarWidth(scalar)
+        }
+        let displayWidth = scalars.contains(where: { $0.value == 0xFE0F }) ? max(2, width) : width
+        return Int(max(1, displayWidth))
+    }
+
+    private static func scalarWidth(_ scalar: Unicode.Scalar) -> Int32 {
+        let value = scalar.value
+        if Self.wideRanges.contains(where: { $0.contains(value) }) { return 2 }
+        return max(0, wcwidth(wchar_t(value)))
     }
 }
 
