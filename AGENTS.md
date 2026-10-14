@@ -94,11 +94,13 @@ hardware.
 - Every interactive screen shares the same chrome — its breadcrumb and key
   bar come from `Terminal.menuBreadcrumb` / `Terminal.keyBar`; only the
   body changes, and a page lists just the key hints it answers to.
-- `VERSION` at the repo root is the human version; every commit that
-  touches shipped code (`Sources/`, `Makefile`, `Package.swift`) bumps it
-  in the same commit — `feat` moves the minor digit, anything else the
-  patch digit. Docs, tests and tooling leave it alone. Display only:
-  change detection compares the source stamp, not the version.
+- `VERSION` at the repo root is the human version, `0.Y.Z`: the last digit
+  is a build counter — every commit that touches shipped code (`Sources/`,
+  `Makefile`, `Package.swift`) increments it in the same commit. The middle
+  digit moves only when the user calls a milestone, resetting the last
+  digit to zero. Docs, tests and tooling leave it alone; no releases or
+  tags, by design. Display only: change detection compares the source
+  stamp, not the version.
 - Results go to stdout, progress and warnings to stderr, so pipes stay clean.
 
 ## Git
