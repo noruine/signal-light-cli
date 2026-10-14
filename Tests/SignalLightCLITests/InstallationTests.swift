@@ -42,4 +42,26 @@ struct InstallationTests {
         }
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: paths.pathSymlinkURL.path) == target.path)
     }
+
+    @Test("Service start rejects a paired device with an invalid UUID")
+    func malformedPairingCannotStartLaunchAgent() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-light-install-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let paths = SignalLightDaemonPaths(home: root)
+        try FileManager.default.createDirectory(at: paths.binDir, withIntermediateDirectories: true)
+        try Data("binary".utf8).write(to: paths.binURL)
+        try SignalLightDeviceStore.save(
+            SignalLightPairedDevice(name: "light", identifier: "not-a-uuid"),
+            to: paths.deviceJSONURL
+        )
+
+        do {
+            try Service.requireRunnable(paths: paths)
+            Issue.record("Expected malformed pairing data to be rejected.")
+        } catch let error as CLIError {
+            #expect(error.exitCode == .config)
+        }
+    }
 }

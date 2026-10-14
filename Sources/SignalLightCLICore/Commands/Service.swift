@@ -34,8 +34,11 @@ struct Service: AsyncParsableCommand {
         } catch {
             throw CLIError("保存的配对信息读取失败，请重新配对：signal-light pair", exitCode: .config)
         }
-        guard device != nil else {
+        guard let device else {
             throw CLIError(ContextText.choose(cli: "还没配对，请运行 signal-light pair。", menu: "还没配对。"), exitCode: .noInput)
+        }
+        guard UUID(uuidString: device.identifier) != nil else {
+            throw CLIError("保存的配对信息已损坏，请重新配对：signal-light pair", exitCode: .config)
         }
     }
 
