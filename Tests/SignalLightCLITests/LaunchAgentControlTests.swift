@@ -52,6 +52,37 @@ struct LaunchAgentControlTests {
             Issue.record("Unexpected error: \(error)")
         }
     }
+
+    @Test("A bootout timeout restores a job that launchd already unloaded")
+    func restoresJobAfterBootoutTimeout() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("signal-light-pause-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let paths = SignalLightDaemonPaths(home: root)
+        try FileManager.default.createDirectory(at: paths.launchAgentsDir, withIntermediateDirectories: true)
+        try Data().write(to: paths.launchAgentPlistURL)
+
+        let runner = PauseLaunchctlStub(pid: Int(ProcessInfo.processInfo.processIdentifier))
+        let control = LaunchAgentControl(paths: paths, processRunner: runner)
+        var bodyRan = false
+
+        do {
+            try await DaemonPause.run(
+                terminal: Terminal(colorMode: .never, quiet: true, environment: [:]),
+                control: control,
+                shutdownTimeout: 0.01
+            ) {
+                bodyRan = true
+            }
+            Issue.record("Expected shutdown to time out while this test process stays alive")
+        } catch let error as CLIError {
+            #expect(error.message.contains("等待后台服务退出超时"))
+        }
+
+        #expect(!bodyRan)
+        #expect(runner.didBootstrap)
+    }
 }
 
 private struct LaunchctlStub: ProcessRunning {
@@ -66,5 +97,42 @@ private struct LaunchctlStub: ProcessRunning {
             return ProcessResult(exitCode: bootoutExitCode, stdout: "", stderr: "denied")
         }
         return ProcessResult(exitCode: 1, stdout: "", stderr: "unexpected command")
+    }
+}
+
+private final class PauseLaunchctlStub: ProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let pid: Int
+    private var bootoutCompleted = false
+    private var bootstrapCompleted = false
+
+    init(pid: Int) {
+        self.pid = pid
+    }
+
+    var didBootstrap: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return bootstrapCompleted
+    }
+
+    func run(_ executableURL: URL, arguments: [String]) throws -> ProcessResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        switch arguments.first {
+        case "print" where !bootoutCompleted:
+            return ProcessResult(exitCode: 0, stdout: "pid = \(pid)\n", stderr: "")
+        case "print":
+            return ProcessResult(exitCode: 1, stdout: "", stderr: "not loaded")
+        case "bootout":
+            bootoutCompleted = true
+            return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        case "bootstrap":
+            bootstrapCompleted = true
+            return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        default:
+            return ProcessResult(exitCode: 1, stdout: "", stderr: "unexpected command")
+        }
     }
 }

@@ -1,3 +1,4 @@
+import Foundation
 import SignalLightKit
 
 /// Runs `body` while guaranteeing the background daemon isn't holding the
@@ -14,13 +15,21 @@ enum DaemonPause {
     static func run<T>(
         terminal: Terminal,
         control: LaunchAgentControl,
+        shutdownTimeout: TimeInterval = 5,
         _ body: () async throws -> T
     ) async throws -> T {
         let wasLoaded = control.jobInfo().isLoaded
 
         if wasLoaded {
             terminal.progress("\(terminal.emoji(CLIGlyph.stop))暂停后台服务，释放蓝牙连接…")
-            try await control.bootoutAndWait()
+            do {
+                try await control.bootoutAndWait(timeout: shutdownTimeout)
+            } catch {
+                if !control.jobInfo().isLoaded {
+                    resumeDaemon(terminal: terminal, control: control)
+                }
+                throw error
+            }
             // The process is gone, but the firmware still needs a beat to
             // notice the BLE disconnect and free its single connection slot.
             try? await Task.sleep(nanoseconds: 500_000_000)
