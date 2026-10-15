@@ -21,6 +21,9 @@ public enum HookEventMapper {
             guard payload.toolName == "AskUserQuestion" else { return nil }
             kind = .permissionRequest
         case .permissionRequest: kind = .permissionRequest
+        case .elicitation:
+            kind = .permissionRequest
+        case .elicitationResult: kind = .postToolUse
         case .permissionDenied: kind = .postToolUse
         case .postToolUse, .postToolUseFailure: kind = .postToolUse
         case .stop: kind = .stop
@@ -33,7 +36,8 @@ public enum HookEventMapper {
             source: .claude,
             kind: kind,
             sessionID: payload.sessionID,
-            isQuestion: kind == .permissionRequest && payload.toolName == "AskUserQuestion"
+            isQuestion: kind == .permissionRequest
+                && (payload.toolName == "AskUserQuestion" || payload.hookEventName == .elicitation)
         )
     }
 
@@ -51,10 +55,9 @@ public enum HookEventMapper {
             kind = .sessionStart
         case .userPromptSubmit: kind = .userPromptSubmit
         case .permissionRequest:
-            if payload.permissionMode == "bypassPermissions" || payload.permissionMode == "dontAsk" {
-                return nil
-            }
-            kind = .permissionRequest
+            // The hook runs before Codex's automatic review can resolve the
+            // request, so it cannot establish that a user is actually waiting.
+            return nil
         case .preToolUse: kind = .preToolUse
         case .postToolUse: kind = .postToolUse
         case .stop: kind = .stop

@@ -31,6 +31,22 @@ struct HookEventMapperTests {
         #expect(event.isQuestion)
     }
 
+    @Test("Claude MCP elicitation starts and ends answer waiting")
+    func claudeElicitation() throws {
+        let request = try decodeClaude(
+            #"{"hook_event_name":"Elicitation","session_id":"s1","cwd":"/tmp","mcp_server_name":"tracker","message":"Choose a project"}"#
+        )
+        let result = try decodeClaude(
+            #"{"hook_event_name":"ElicitationResult","session_id":"s1","cwd":"/tmp","mcp_server_name":"tracker","action":"accept"}"#
+        )
+        let waiting = try #require(HookEventMapper.event(from: request))
+        let resumed = try #require(HookEventMapper.event(from: result))
+
+        #expect(waiting.kind == .permissionRequest)
+        #expect(waiting.isQuestion)
+        #expect(resumed.kind == .postToolUse)
+    }
+
     @Test("Claude AskUserQuestion starts waiting from PreToolUse")
     func claudePreToolQuestion() throws {
         let payload = try decodeClaude(#"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/tmp","tool_name":"AskUserQuestion"}"#)
@@ -77,12 +93,10 @@ struct HookEventMapperTests {
         #expect(HookEventMapper.event(from: startup)?.kind == .sessionStart)
     }
 
-    @Test("Codex events map onto the same shape")
-    func codexApproval() throws {
+    @Test("Codex permission requests are telemetry, not proof of user approval")
+    func codexPermissionRequestIsIgnored() throws {
         let payload = try decodeCodex(#"{"hook_event_name":"PermissionRequest","session_id":"c1","cwd":"/tmp"}"#)
-        let event = try #require(HookEventMapper.event(from: payload))
-        #expect(event.source == .codex)
-        #expect(event.kind == .permissionRequest)
+        #expect(HookEventMapper.event(from: payload) == nil)
     }
 
     @Test("Codex tool start marks approval as resolved")
@@ -104,16 +118,6 @@ struct HookEventMapperTests {
 
         #expect(HookEventMapper.event(from: compact) == nil)
         #expect(HookEventMapper.event(from: startup)?.kind == .sessionStart)
-    }
-
-    @Test("Codex automatic permission modes do not wait for approval")
-    func codexAutomaticPermissionModes() throws {
-        for mode in ["bypassPermissions", "dontAsk"] {
-            let payload = try decodeCodex(
-                #"{"hook_event_name":"PermissionRequest","session_id":"c1","cwd":"/tmp","permission_mode":"\#(mode)"}"#
-            )
-            #expect(HookEventMapper.event(from: payload) == nil)
-        }
     }
 
     @Test("Codex.app internal hooks are dropped")

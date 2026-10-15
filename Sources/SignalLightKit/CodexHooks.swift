@@ -8,7 +8,6 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
     public var source: String?
     public var terminalApp: String?
     public var transcriptPath: String?
-    public var permissionMode: String?
 
     public init(
         cwd: String,
@@ -17,7 +16,6 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
         source: String? = nil,
         terminalApp: String? = nil,
         transcriptPath: String? = nil,
-        permissionMode: String? = nil
     ) {
         self.cwd = cwd
         self.hookEventName = hookEventName
@@ -25,7 +23,6 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
         self.source = source
         self.terminalApp = terminalApp
         self.transcriptPath = transcriptPath
-        self.permissionMode = permissionMode
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -35,12 +32,10 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
         case source
         case terminalApp = "terminal_app"
         case transcriptPath = "transcript_path"
-        case permissionMode = "permission_mode"
     }
 }
 
-/// Every event name Codex can send; see `ClaudeHookEventName` for why the
-/// unconsumed ones are decoded anyway.
+/// Codex hook event names recognized by signal-light.
 public enum CodexHookEventName: String, Codable, Sendable {
     case sessionStart = "SessionStart"
     case preToolUse = "PreToolUse"

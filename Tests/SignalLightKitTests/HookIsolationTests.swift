@@ -39,6 +39,17 @@ struct HookIsolationTests {
         }
     }
 
+    private func hookTimeouts(for eventName: String, in data: Data) throws -> [Int] {
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let groups = hooks[eventName] as? [[String: Any]] ?? []
+        return groups.flatMap { group in
+            ((group["hooks"] as? [[String: Any]]) ?? []).compactMap { hook in
+                (hook["timeout"] as? NSNumber)?.intValue
+            }
+        }
+    }
+
     @Test("Claude install adds ours and leaves the foreign hook alone")
     func claudeInstallKeepsForeign() throws {
         let mutation = try ClaudeHookInstaller.installSettingsJSON(
@@ -287,12 +298,51 @@ struct HookIsolationTests {
 
     @Test("Managed hooks observe answers and completed tools")
     func managedHooksObserveResolutionEvents() throws {
+        #expect(Set(ClaudeHookInstaller.managedEventNames) == [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PermissionRequest",
+            "Elicitation",
+            "ElicitationResult",
+            "PermissionDenied",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "Stop",
+            "StopFailure",
+            "SessionEnd",
+        ])
+        #expect(Set(CodexHookInstaller.managedEventNames) == [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "Stop",
+            "SessionEnd",
+            "Interrupt",
+        ])
+        let claudeData = try #require(ClaudeHookInstaller.installSettingsJSON(
+            existingData: nil,
+            hookCommand: managedCommand
+        ).contents)
+        for eventName in ClaudeHookInstaller.managedEventNames {
+            #expect(try hookTimeouts(for: eventName, in: claudeData) == [5])
+        }
+        let codexData = try #require(CodexHookInstaller.installHooksJSON(
+            existingData: nil,
+            hookCommand: managedCommand
+        ).contents)
+        for eventName in CodexHookInstaller.managedEventNames {
+            let timeout = ["SessionEnd", "Interrupt"].contains(eventName) ? 3 : 5
+            #expect(try hookTimeouts(for: eventName, in: codexData) == [timeout])
+        }
         #expect(ClaudeHookInstaller.managedEventNames.contains("PreToolUse"))
         #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUse"))
         #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUseFailure"))
         #expect(ClaudeHookInstaller.managedEventNames.contains("PermissionDenied"))
         #expect(CodexHookInstaller.managedEventNames.contains("PostToolUse"))
         #expect(CodexHookInstaller.managedEventNames.contains("PreToolUse"))
+        #expect(!CodexHookInstaller.managedEventNames.contains("PermissionRequest"))
 
         let installed = try ClaudeHookInstaller.installSettingsJSON(
             existingData: nil,
@@ -422,6 +472,80 @@ struct HookIsolationTests {
         #expect(!FileManager.default.fileExists(atPath: claudeDirectory.appendingPathComponent("settings.json").path))
         #expect(!FileManager.default.fileExists(atPath: codexDirectory.appendingPathComponent("hooks.json").path))
         #expect(try String(contentsOf: codexConfig, encoding: .utf8) == "[features]\nhooks = true\n")
+    }
+
+    @Test("Agent hook upgrades and uninstall preserve third-party hooks")
+    func agentHookUpgradeAndUninstallPreserveForeignHooks() throws {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sl-test-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let claudeDirectory = scratch.appendingPathComponent("claude", isDirectory: true)
+        let codexDirectory = scratch.appendingPathComponent("codex", isDirectory: true)
+        let source = scratch.appendingPathComponent("agent-hooks-source")
+        let claudeBinary = scratch.appendingPathComponent("bin/claude-agent-hooks")
+        let codexBinary = scratch.appendingPathComponent("bin/codex-agent-hooks")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        try Data("hook binary".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let claudeManager = ClaudeHookInstallationManager(
+            claudeDirectory: claudeDirectory,
+            managedHooksBinaryURL: claudeBinary
+        )
+        let codexManager = CodexHookInstallationManager(
+            codexDirectory: codexDirectory,
+            managedHooksBinaryURL: codexBinary,
+            featureKeyProvider: { .current }
+        )
+
+        _ = try claudeManager.install(hooksBinaryURL: source)
+        _ = try codexManager.install(hooksBinaryURL: source)
+
+        let claudeSettingsURL = claudeDirectory.appendingPathComponent("settings.json")
+        var claudeSettings = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: claudeSettingsURL)) as? [String: Any])
+        var claudeHooks = try #require(claudeSettings["hooks"] as? [String: Any])
+        claudeHooks["PermissionRequest"] = [["hooks": [["type": "command", "command": foreignCommand]]]]
+        claudeSettings["hooks"] = claudeHooks
+        try JSONSerialization.data(withJSONObject: claudeSettings).write(to: claudeSettingsURL)
+
+        let codexHooksURL = codexDirectory.appendingPathComponent("hooks.json")
+        var codexSettings = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: codexHooksURL)) as? [String: Any])
+        var codexHooks = try #require(codexSettings["hooks"] as? [String: Any])
+        codexHooks["PermissionRequest"] = [["hooks": [
+            ["type": "command", "command": CodexHookInstaller.hookCommand(for: codexBinary.path)],
+            ["type": "command", "command": foreignCommand],
+        ]]]
+        codexSettings["hooks"] = codexHooks
+        try JSONSerialization.data(withJSONObject: codexSettings).write(to: codexHooksURL)
+
+        _ = try claudeManager.install(hooksBinaryURL: source)
+        _ = try codexManager.install(hooksBinaryURL: source)
+
+        let upgradedClaude = try Data(contentsOf: claudeSettingsURL)
+        let upgradedCodex = try Data(contentsOf: codexHooksURL)
+        #expect(try hookCommands(in: upgradedClaude).contains(foreignCommand))
+        #expect(try hookCommands(in: upgradedCodex).contains(foreignCommand))
+        #expect(try hookCommands(in: upgradedCodex).filter {
+            $0 == CodexHookInstaller.hookCommand(for: codexBinary.path)
+        }.count == CodexHookInstaller.managedEventNames.count)
+        #expect(try hookCommands(in: upgradedClaude).filter {
+            $0 == ClaudeHookInstaller.hookCommand(for: claudeBinary.path)
+        }.count == ClaudeHookInstaller.managedEventNames.count)
+        #expect(try hookCommands(in: upgradedCodex).filter {
+            $0 == CodexHookInstaller.hookCommand(for: codexBinary.path)
+        }.count == CodexHookInstaller.managedEventNames.count)
+
+        _ = try claudeManager.uninstall()
+        _ = try codexManager.uninstall()
+
+        let uninstalledClaude = try Data(contentsOf: claudeSettingsURL)
+        let uninstalledCodex = try Data(contentsOf: codexHooksURL)
+        #expect(try hookCommands(in: uninstalledClaude) == [foreignCommand])
+        #expect(try hookCommands(in: uninstalledCodex) == [foreignCommand])
+        let codexConfig = try String(
+            contentsOf: codexDirectory.appendingPathComponent("config.toml"),
+            encoding: .utf8
+        )
+        #expect(CodexHookInstaller.isCodexHooksFeatureEnabled(in: codexConfig))
     }
 
     @Test("The locator honors SIGNAL_LIGHT_HOOKS_BINARY and ignores the old key")

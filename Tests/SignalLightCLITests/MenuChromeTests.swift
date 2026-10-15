@@ -90,23 +90,8 @@ struct MenuChromeTests {
         #expect(StatusSnapshot.menuHooksDescription(for: ["Claude Code", "Codex"]) == "Claude Code + Codex")
     }
 
-    @Test("Status lists per-session counts without naming a lamp driver")
-    func statusSessionLines() {
-        let sessions = [
-            SessionRegistry.SessionStatus(source: .claude, sessionID: "12345678-abc", phase: .running),
-            SessionRegistry.SessionStatus(source: .codex, sessionID: "abcdefgh-xyz", phase: .waitingForAnswer),
-        ]
-
-        #expect(StatusSnapshot.sessionLines(sessions: sessions) == [
-            "    会话      2 个：工作中 1、等待回答 1",
-        ])
-        #expect(StatusSnapshot.menuSessionLines(sessions: sessions) == [
-            "会话      2 个（工作中 1、等待回答 1）",
-        ])
-    }
-
-    @Test("The interactive header shows the same session counts as status")
-    func menuHeaderSessionLines() {
+    @Test("The interactive header omits session counts")
+    func menuHeaderOmitsSessionCounts() {
         let sessions = [
             SessionRegistry.SessionStatus(source: .codex, sessionID: "working", phase: .running),
             SessionRegistry.SessionStatus(source: .codex, sessionID: "other", phase: .idle),
@@ -135,14 +120,10 @@ struct MenuChromeTests {
             "    Hooks     [on] Codex",
             "    蓝牙      [on] blinkenlights",
             "    当前状态  🏃工作中",
-            "    会话      2 个（工作中 1、空闲 1）",
         ])
         #expect(!snapshot.menuHeaderLines(terminal: plain).joined().contains("灯态主导"))
-        #expect(snapshot.humanReadableLines(
-            terminal: plain,
-            includeHeading: false,
-            sessionSummaryStyle: .menu
-        ).contains("会话      2 个（工作中 1、空闲 1）"))
+        #expect(!snapshot.humanReadableLines(terminal: plain, includeHeading: false)
+            .joined().contains("会话"))
     }
 
     @Test("A status snapshot is live only when launchd owns its PID")

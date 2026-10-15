@@ -33,22 +33,25 @@
 | --- | --- | --- |
 | Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；signal-light 的匹配规则不处理 `compact`，映射层也会忽略该原因。 |
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
-| Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
+| Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | Claude Code 为工具请求权限时触发，显示等待审批。 |
 | Claude `PermissionDenied` | `PostToolUse` | 自动模式拒绝工具后，清除等待审批并继续显示工作中。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
+| Claude `Elicitation` | `PermissionRequest`，`isQuestion: true` | MCP 服务请求用户输入，显示等待回答；hook 不返回处理结果，保留 Claude Code 的交互对话框。 |
+| Claude `ElicitationResult` | `PostToolUse` | 用户已提交或取消输入，恢复为工作中。 |
 | Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Claude `Stop` / `StopFailure` | `Stop` / `StopFailure` | 当前轮次结束。 |
 | Claude `SessionEnd` | `SessionEnd` | 移除会话。 |
 | Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；映射层忽略 `compact`。 |
 | Codex `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
-| Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 需要人工审批时等待审批；自动批准或不提示模式忽略。 |
-| Codex `PreToolUse` | `PreToolUse` | 工具开始执行，清除等待审批并显示工作中。 |
+| Codex `PermissionRequest` | 忽略 | 官方定义为即将请求审批；但 hook 先于自动审查执行，后续可能自动批准。仅凭该事件不能确认用户正在等待，因此不用于灯态。 |
+| Codex `PreToolUse` | `PreToolUse` | 工具开始执行，显示工作中。 |
 | Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Codex `Stop` / `Interrupt` | `Stop` / `Interrupt` | 当前轮次结束或中断。 |
 | Codex `SessionEnd` | `SessionEnd` | 移除会话。 |
 
-Claude 子代理事件会忽略，避免把同一工作重复计入。Codex.app 没有会话记录的内部事件也会忽略。
-Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能继续当前轮次。
+Claude 子代理事件不会安装，也会在映射层忽略，避免把同一工作重复计入。Codex 的子代理事件使用父会话 ID，
+同样不单独安装。Codex.app 没有会话记录的内部事件会忽略。Claude Code 和 Codex 的 `compact` 都不会作为新会话处理；
+压缩后可能继续当前轮次，因此保留原会话状态。
 
 ## 会话状态与灯光汇总
 
@@ -58,14 +61,14 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 | --- | --- |
 | `SessionStart` | 空闲 |
 | `UserPromptSubmit` / `PreToolUse` / `PostToolUse` | 工作中 |
-| `PermissionRequest`，`isQuestion: false` | 等待审批 |
+| Claude `PermissionRequest`，`isQuestion: false` | 等待审批 |
 | `PermissionRequest`，`isQuestion: true` | 等待回答 |
 | `Stop` / `StopFailure` / `Interrupt` | 空闲 |
 | `SessionEnd` | 移除会话 |
 
 一盏灯无法分别显示多个会话，因此守护进程会汇总所有会话，只显示优先级最高的一种状态：
 **等待审批 > 等待回答 > 工作中 > 空闲**。空闲会话不影响其他会话。`signal-light status`
-和交互模式的状态页会列出各状态的会话数；交互模式每秒刷新一次状态。
+和交互菜单只显示灯当前状态，不列出会话数量；交互菜单每秒刷新一次状态。
 
 | 会话 A | 会话 B | 灯显示 |
 | --- | --- | --- |
@@ -82,13 +85,24 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 ## 安装范围
 
 Claude Code 安装 `SessionStart`、`UserPromptSubmit`、`PreToolUse`（仅匹配
-`AskUserQuestion`）、`PermissionRequest`、`PermissionDenied`、`PostToolUse`、`PostToolUseFailure`、`Stop`、
-`StopFailure` 和 `SessionEnd`。
+`AskUserQuestion`）、`PermissionRequest`、`Elicitation`、`ElicitationResult`、
+`PermissionDenied`、`PostToolUse`、`PostToolUseFailure`、`Stop`、`StopFailure` 和
+`SessionEnd`。
 
 Codex 安装 `SessionStart`（startup、resume、clear、fork）、`UserPromptSubmit`、
-`PermissionRequest`、`PreToolUse`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。
-`PreToolUse` 表示工具已获准并开始执行，会话立即回到工作中，不必等工具完成。
+`PreToolUse`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。Codex 官方把
+[`PermissionRequest`](https://developers.openai.com/codex/hooks) 定义为即将请求审批，但该 hook 可能先于自动审查结果；
+自动审查随后可能批准。cmux 也把该事件作为非阻塞遥测处理，只有 Codex app-server 通道能取得审查后的可操作审批请求。
+因此 signal-light 不据此显示等待审批。Claude Code 的 `PermissionRequest` 则用于显示等待审批。
 
-运行 `make install` 更新时，只同步已接入 Agent 的 signal-light hooks；未接入的 Agent 不会自动添加，其他 hooks 保持不变。
+Claude Code 的 `Notification` 不改变会话状态，审批直接由 `PermissionRequest` 表示，因此不重复安装通知事件。
+所有 signal-light hook 的执行超时为 5 秒；Codex 的 `SessionEnd` 和 `Interrupt` 最长为 3 秒。
+
+事件行为以 [Claude Code hooks 文档](https://code.claude.com/docs/en/hooks)、
+[Codex hooks 文档](https://developers.openai.com/codex/hooks) 和
+[cmux Feed 设计](https://github.com/manaflow-ai/cmux/blob/main/docs/feed.md) 为准。
+
+安装或升级只同步当前事件清单中的 signal-light hooks；清单外的事件和第三方 hooks 保持不变。
+卸载会扫描所有事件，只移除命令与 signal-light 安装记录匹配的 hooks。
 
 安装和卸载只修改 signal-light 自己写入的钩子。

@@ -61,31 +61,49 @@ struct Audit: AsyncParsableCommand {
 
         for path in entries {
             let pathString = path.standardizedFileURL.path
-            let depth = directoryPaths.filter { pathString.hasPrefix($0 + "/") }.count
-            let indent = String(repeating: "  ", count: depth)
+            let label = Self.inventoryLabel(path, root: paths.cliRootDir, directories: directoryPaths)
 
             // A socket with a live listener is not this CLI's residue —
             // cleanup correctly leaves it alone.
             if liveSocketPaths.contains(path.path) {
                 let holder = daemonIsRunning ? "后台服务在用" : "正在被别的程序使用"
-                terminal.out("\(indent)● \(PathText.abbreviated(path))（\(holder)）")
+                terminal.out("● \(label)（\(holder)）")
                 continue
             }
             // An inventory path somebody else occupies (a directory where one
             // of our files should be, a repointed PATH link): still there, but
             // not ours to remove.
             if keptForeignPaths.contains(path.path) {
-                terminal.out("\(indent)● \(PathText.abbreviated(path))（不是本工具建的）")
+                terminal.out("● \(label)（不是本工具建的）")
                 continue
             }
             let exists = directoryPaths.contains(pathString)
                 ? FileManager.default.fileExists(atPath: path.path)
                 : remainingPaths.contains(path.path)
-            terminal.out("\(indent)\(dot(exists, terminal: terminal)) \(PathText.abbreviated(path))")
+            terminal.out("\(dot(exists, terminal: terminal)) \(label)")
         }
 
         let jobLabel = "launchd job (\(SignalLightDaemonPaths.launchAgentLabel))"
         terminal.out("\(dot(jobInfo.isLoaded, terminal: terminal)) \(jobLabel)")
+    }
+
+    static func inventoryLabel(_ path: URL, root: URL, directories: Set<String>) -> String {
+        let pathString = path.standardizedFileURL.path
+        let rootString = root.standardizedFileURL.path
+        guard pathString == rootString || pathString.hasPrefix(rootString + "/") else {
+            return PathText.abbreviated(path)
+        }
+
+        let name: String
+        if pathString == rootString {
+            let abbreviatedRoot = PathText.abbreviated(root)
+            name = abbreviatedRoot.hasSuffix("/") ? String(abbreviatedRoot.dropLast()) : abbreviatedRoot
+        } else {
+            name = path.lastPathComponent
+        }
+        let depth = directories.filter { pathString.hasPrefix($0 + "/") }.count
+        let directorySuffix = directories.contains(pathString) ? "/" : ""
+        return "\(String(repeating: "  ", count: depth))\(name)\(directorySuffix)"
     }
 
     /// ● for present, dim ○ for absent — the status dot without its colors:

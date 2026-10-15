@@ -72,8 +72,7 @@ public enum CodexHookInstallerError: Error, LocalizedError {
 
 public enum CodexHookInstaller {
     public static let managedStatusMessage = "Managed by signal-light"
-    public static let managedTimeout = 45
-    public static let managedInteractiveTimeout = 60 * 60
+    public static let managedTimeout = 5
     private static let currentFeatureKey = CodexHooksFeatureFlagKey.current.rawValue
     private static let legacyFeatureKey = CodexHooksFeatureFlagKey.legacy.rawValue
 
@@ -86,14 +85,12 @@ public enum CodexHookInstaller {
         // it as a new idle session would hide work until the turn ends.
         ("SessionStart", "startup|resume|clear|fork", managedTimeout),
         ("UserPromptSubmit", nil, managedTimeout),
-        ("PermissionRequest", nil, managedInteractiveTimeout),
         // A tool starting means an approval was resolved; publish work
         // immediately instead of waiting for the tool to finish.
         ("PreToolUse", nil, managedTimeout),
         ("PostToolUse", nil, managedTimeout),
         ("Stop", nil, managedTimeout),
-        // Codex caps these at 3 seconds and silently kills slower hooks, so
-        // ask for the maximum a slow cold start might need.
+        // Codex caps these at 3 seconds, including when configured explicitly.
         ("SessionEnd", nil, 3),
         ("Interrupt", nil, 3),
     ]
@@ -120,6 +117,8 @@ public enum CodexHookInstaller {
         let existingHooksObject = rootObject["hooks"] as? [String: Any] ?? [:]
         var hooksObject: [String: Any] = [:]
 
+        // Remove only commands recorded by this installation, including a
+        // hook left under an event no longer used by the current version.
         for (eventName, value) in existingHooksObject {
             guard let existingGroups = value as? [Any] else {
                 hooksObject[eventName] = value
@@ -130,7 +129,6 @@ public enum CodexHookInstaller {
                 replacingCommand: hookCommand,
                 previousCommand: previousHookCommand
             )
-
             if !cleanedGroups.isEmpty {
                 hooksObject[eventName] = cleanedGroups
             }

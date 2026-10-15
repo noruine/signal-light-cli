@@ -219,15 +219,16 @@ struct SessionRegistryTests {
         #expect(await registry.snapshot().isEmpty)
     }
 
-    @Test("A legacy Codex approval without an event time restores as idle")
-    func legacyCodexApprovalRestoresIdle() async {
+    @Test("A persisted Codex approval request restores as idle")
+    func codexApprovalRequestRestoresIdle() async {
         let registry = SessionRegistry(restoring: [
             SessionRegistry.SessionStatus(
                 source: .codex,
-                sessionID: "legacy",
-                phase: .waitingForApproval
+                sessionID: "approval",
+                phase: .waitingForApproval,
+                lastEventAt: .now
             ),
-        ], fallbackLastEventAt: .now)
+        ])
 
         #expect(await registry.summary().bucket == .idle)
     }

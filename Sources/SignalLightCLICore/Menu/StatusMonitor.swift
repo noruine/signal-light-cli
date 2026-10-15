@@ -29,7 +29,6 @@ enum StatusMonitor {
                 body: snapshot.humanReadableLines(
                     terminal: terminal,
                     includeHeading: false,
-                    sessionSummaryStyle: .menu
                 ),
                 bar: footer
             ))

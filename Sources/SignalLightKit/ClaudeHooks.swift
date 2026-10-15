@@ -41,9 +41,8 @@ public struct ClaudeHookPayload: Codable, Sendable, Equatable {
     }
 }
 
-/// Every event name Claude Code can send. Names the light doesn't consume are
-/// still decodable: a hook left in a user's settings by an older install must
-/// not fail the whole payload.
+/// Claude hook event names recognized by signal-light, including events it
+/// intentionally ignores so stale managed entries remain decodable.
 public enum ClaudeHookEventName: String, Codable, Sendable {
     case sessionStart = "SessionStart"
     case sessionEnd = "SessionEnd"
@@ -59,4 +58,6 @@ public enum ClaudeHookEventName: String, Codable, Sendable {
     case subagentStart = "SubagentStart"
     case subagentStop = "SubagentStop"
     case preCompact = "PreCompact"
+    case elicitation = "Elicitation"
+    case elicitationResult = "ElicitationResult"
 }

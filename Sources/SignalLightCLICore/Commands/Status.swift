@@ -143,8 +143,7 @@ struct StatusSnapshot {
 
     func humanReadableLines(
         terminal: Terminal,
-        includeHeading: Bool,
-        sessionSummaryStyle: SessionSummaryStyle = .command
+        includeHeading: Bool
     ) -> [String] {
         var lines: [String] = []
         // Inside the menu the breadcrumb already names the screen; only a
@@ -165,55 +164,12 @@ struct StatusSnapshot {
             if let bucket = state?.currentBucket {
                 lines.append("    当前状态  \(SignalLightBucketDisplay.name(forRaw: bucket))")
             }
-            let sessionLines = switch sessionSummaryStyle {
-            case .command: Self.sessionLines(sessions: state?.sessions)
-            case .menu: Self.menuSessionLines(sessions: state?.sessions)
-            }
-            lines.append(contentsOf: sessionLines)
         } else {
             lines.append("    蓝牙      —  \(state == nil ? "还没有状态记录" : "服务未运行，看不到实时状态")")
         }
 
         lines.append("    日志      \(PathText.abbreviated(paths.logURL))")
         return lines
-    }
-
-    enum SessionSummaryStyle {
-        case command
-        case menu
-    }
-
-    static func sessionLines(
-        sessions: [SessionRegistry.SessionStatus]?
-    ) -> [String] {
-        guard let summary = sessionSummary(sessions) else { return ["    会话      尚未收到会话事件"] }
-        guard !summary.counts.isEmpty else { return ["    会话      暂无会话记录"] }
-
-        return ["    会话      \(summary.total) 个：\(summary.counts.joined(separator: "、"))"]
-    }
-
-    static func menuSessionLines(sessions: [SessionRegistry.SessionStatus]?) -> [String] {
-        guard let summary = sessionSummary(sessions) else { return ["会话      尚未收到事件"] }
-        guard !summary.counts.isEmpty else { return ["会话      暂无记录"] }
-
-        return ["会话      \(summary.total) 个（\(summary.counts.joined(separator: "、"))）"]
-    }
-
-    private static func sessionSummary(
-        _ sessions: [SessionRegistry.SessionStatus]?
-    ) -> (total: Int, counts: [String])? {
-        guard let sessions else { return nil }
-        let phases: [(SessionRegistry.Phase, String)] = [
-            (.running, "工作中"),
-            (.waitingForApproval, "等待审批"),
-            (.waitingForAnswer, "等待回答"),
-            (.idle, "空闲"),
-        ]
-        let counts = phases.compactMap { phase, name -> String? in
-            let count = sessions.filter { $0.phase == phase }.count
-            return count == 0 ? nil : "\(name) \(count)"
-        }
-        return (sessions.count, counts)
     }
 
     /// One compact line for the interactive menu's header: service state, the
@@ -227,7 +183,6 @@ struct StatusSnapshot {
         if stateIsLive {
             lines.append("    蓝牙      \(terminal.statusDot(state?.ble == .connected)) \(menuBluetoothDescription)")
             lines.append("    当前状态  \(menuBucketDescription)")
-            lines.append(contentsOf: Self.menuSessionLines(sessions: state?.sessions).map { "    \($0)" })
         }
         return lines
     }
@@ -350,7 +305,6 @@ struct StatusSnapshot {
             let ble: String
             let deviceName: String?
             let currentBucket: String?
-            let sessions: [SessionRegistry.SessionStatus]?
             /// Whether the `ble`/`currentBucket`/`stateUpdatedAt` fields come
             /// from a daemon that is still running.
             let stateLive: Bool
@@ -369,7 +323,6 @@ struct StatusSnapshot {
             ble: stateIsLive ? (state?.ble.rawValue ?? SignalLightDaemonState.BLE.disconnected.rawValue) : "unknown",
             deviceName: deviceName,
             currentBucket: stateIsLive ? state?.currentBucket : nil,
-            sessions: stateIsLive ? state?.sessions : nil,
             stateLive: stateIsLive,
             stateUpdatedAt: liveStateUpdatedAt.map { ISO8601DateFormatter().string(from: $0) },
             logPath: paths.logURL.path

@@ -46,21 +46,23 @@ public enum ClaudeHookInstallerError: Error, LocalizedError {
 }
 
 public enum ClaudeHookInstaller {
-    public static let managedTimeout = 86_400
+    public static let managedTimeout = 5
 
     /// Tracks submitted prompts, approval requests, user questions, tool
     /// completion and turn/session endings for the signal light.
     private static let eventSpecs: [(name: String, matcher: String?, timeout: Int?)] = [
-        ("SessionStart", "startup|resume|clear|fork", nil),
-        ("UserPromptSubmit", nil, nil),
+        ("SessionStart", "startup|resume|clear|fork", managedTimeout),
+        ("UserPromptSubmit", nil, managedTimeout),
         ("PreToolUse", "AskUserQuestion", managedTimeout),
         ("PermissionRequest", "*", managedTimeout),
+        ("Elicitation", "*", managedTimeout),
+        ("ElicitationResult", "*", managedTimeout),
         ("PermissionDenied", nil, managedTimeout),
         ("PostToolUse", nil, managedTimeout),
         ("PostToolUseFailure", nil, managedTimeout),
-        ("Stop", nil, nil),
-        ("StopFailure", nil, nil),
-        ("SessionEnd", nil, nil),
+        ("Stop", nil, managedTimeout),
+        ("StopFailure", nil, managedTimeout),
+        ("SessionEnd", nil, managedTimeout),
     ]
 
     /// The event names the managed install writes — exposed so the CLI can

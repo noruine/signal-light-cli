@@ -32,8 +32,7 @@ public struct HookEvent: Codable, Sendable, Equatable {
     public let source: Source
     public let kind: Kind
     public let sessionID: String
-    /// Claude's `AskUserQuestion` arrives as a permission request but is a
-    /// question: the light shows 「等待回答」, not 「等待审批」.
+    /// A question event uses the answer-waiting state rather than approval.
     public let isQuestion: Bool
 
     public init(source: Source, kind: Kind, sessionID: String, isQuestion: Bool = false) {

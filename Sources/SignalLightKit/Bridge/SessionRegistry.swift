@@ -206,8 +206,9 @@ public actor SessionRegistry {
     }
 
     private static func restoredPhase(for status: SessionStatus) -> Phase {
-        // Older snapshots cannot prove a Codex approval is still pending.
-        if status.lastEventAt == nil, status.source == .codex, status.phase == .waitingForApproval {
+        // Codex's PermissionRequest hook runs before its automatic review, so
+        // a persisted request cannot prove approval is still pending.
+        if status.source == .codex, status.phase == .waitingForApproval {
             return .idle
         }
         return status.phase
