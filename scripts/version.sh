@@ -5,12 +5,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-level="${1:-patch}"
+level="${1:-}"
 case "$level" in
-    patch|minor|major) ;;
+    ""|patch|minor|major|none) ;;
     *)
         printf 'Unknown version level: %s\n' "$level" >&2
-        printf 'Use patch, minor, or major.\n' >&2
+        printf 'Use patch, minor, major, or none.\n' >&2
         exit 2
         ;;
 esac
@@ -66,6 +66,20 @@ if [[ "$product_changed" != true ]]; then
         exit 1
     fi
     printf 'No product code changes; VERSION remains %s.\n' "$base_version"
+    exit 0
+fi
+
+if [[ -z "$level" ]]; then
+    printf 'Product code changed; classify it and set LEVEL. See AGENTS.md.\n' >&2
+    exit 2
+fi
+
+if [[ "$level" == none ]]; then
+    if [[ "$current_version" != "$base_version" ]]; then
+        printf 'VERSION changed, but LEVEL=none was selected.\n' >&2
+        exit 1
+    fi
+    printf 'No public behavior change; VERSION remains %s.\n' "$base_version"
     exit 0
 fi
 

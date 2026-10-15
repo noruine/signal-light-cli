@@ -31,8 +31,8 @@ format:  ## Rewrite sources with swiftformat
 	@command -v swiftformat >/dev/null || { echo "swiftformat missing: brew install swiftformat"; exit 1; }
 	swiftformat .
 
-version:  ## Check and update VERSION for changed product code
-	scripts/version.sh $(if $(LEVEL),$(LEVEL),patch)
+version:  ## Apply a SemVer level to VERSION (LEVEL=patch|minor|major|none)
+	scripts/version.sh $(LEVEL)
 
 clean:  ## Remove build products
 	rm -rf .build

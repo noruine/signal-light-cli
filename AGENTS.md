@@ -23,13 +23,26 @@
 | 运行测试 | `make test` |
 | 格式化 | `make format` |
 | 检查格式、SwiftLint 和 CLI 文案 | `make lint` |
-| 检查并更新版本号 | `make version` |
+| 按语义化版本规则更新版本号 | `make version LEVEL=<level>` |
 
 `make build` 和 `make test` 会通过脚本传入 `--build-system native`。Command Line Tools 环境下，
 优先使用 `make test` 或 `scripts/test.sh`；后者会补充 `Testing.framework` 搜索路径。
 格式和 lint 命令需要通过 Homebrew 安装 `swiftformat` 与 `swiftlint`。
-每次提交前运行 `make version`。发布代码变更默认递增末位；里程碑版本需显式使用
-`make version LEVEL=minor` 或 `make version LEVEL=major`。脚本不推断改动的语义级别。
+提交前运行 `make version`。发布代码有改动时，Agent 必须按改动影响选择 `LEVEL`；不要询问用户，
+也不要把所有代码改动都默认为修订号递增。脚本只执行版本计算并校验，不判断兼容性。
+
+本项目的公共接口包括 CLI 命令与选项、用户配置格式，以及本仓库文档定义的 Agent 钩子协议。
+版本使用 `X.Y.Z`，数字段不加前导零。`0.y.z` 表示公共接口尚不稳定；本项目在此阶段，
+兼容性修复递增修订号，新增功能或不兼容变化递增次版本号。`1.0.0` 表示公共接口进入稳定阶段。
+此后按语义化版本控制递增：
+
+- `LEVEL=patch`：修复问题，且不破坏公共接口的兼容性。
+- `LEVEL=minor`：增加兼容功能或弃用公共功能；在 `0.y.z` 阶段，不兼容变化也递增次版本号并将修订号归零。
+- `LEVEL=major`：公共接口进入稳定阶段时升至 `1.0.0`；达到 `1.0.0` 后，不兼容变化递增主版本号并将次版本号和修订号归零。
+- `LEVEL=none`：只改文档、测试、开发工具，或内部实现变化不影响外部行为。
+
+有发布代码改动时，必须显式传入级别，例如 `make version LEVEL=patch`。只有非发布代码改动时，
+`make version` 可不带 `LEVEL`，且 `VERSION` 必须保持不变。
 
 ## 硬件与系统操作
 
