@@ -7,8 +7,6 @@ struct Run: AsyncParsableCommand {
         shouldDisplay: false
     )
 
-    @OptionGroup var globals: GlobalOptions
-
     func run() async throws {
         try await SignalLightDaemonRunner.run(paths: .current())
     }

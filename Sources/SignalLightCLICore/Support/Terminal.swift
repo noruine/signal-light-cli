@@ -2,10 +2,9 @@ import Foundation
 
 /// Governs where output goes (stdout for results, stderr for diagnostics —
 /// see the CLI's Unix-philosophy requirement) and whether ANSI color /
-/// decorative emoji are emitted. Constructed once per invocation from the
-/// root command's global options and threaded into subcommands explicitly
-/// rather than read from a global singleton, so behavior stays predictable
-/// under `--color=always|never` regardless of call site.
+/// decorative emoji are emitted. Constructed once per command from its output
+/// options and passed to helpers rather than read from a global singleton.
+/// This keeps behavior predictable under `--color=always|never`.
 public struct Terminal: Sendable {
     public enum ColorMode: String, Sendable, CaseIterable {
         case auto
@@ -16,12 +15,10 @@ public struct Terminal: Sendable {
     public let useColor: Bool
     public let useEmoji: Bool
     public let isInteractive: Bool
-    public let verbose: Bool
     public let quiet: Bool
 
     public init(
         colorMode: ColorMode,
-        verbose: Bool = false,
         quiet: Bool = false,
         isOutputTTY: Bool = isatty(STDOUT_FILENO) != 0,
         isInputTTY: Bool = isatty(STDIN_FILENO) != 0,
@@ -39,7 +36,6 @@ public struct Terminal: Sendable {
         }
         useEmoji = useColor
         isInteractive = isInputTTY
-        self.verbose = verbose
         self.quiet = quiet
     }
 
@@ -88,12 +84,6 @@ public struct Terminal: Sendable {
         guard !quiet else { return }
         if MenuActionScreen.appendProgress(text) { return }
         note(text)
-    }
-
-    /// stderr: extra detail only shown under `--verbose`.
-    public func debug(_ text: String) {
-        guard verbose else { return }
-        note(dimmed(text))
     }
 
     /// stderr: a non-fatal warning.

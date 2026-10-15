@@ -8,21 +8,17 @@ import Foundation
 // place in the target that needs to know ArgumentParser exists.
 extension Terminal.ColorMode: ExpressibleByArgument {}
 
-/// Options every subcommand shares. Threaded in explicitly via `@OptionGroup`
-/// rather than read from a global/singleton, so `--color=never` (say) can
-/// never leak between commands or accidentally depend on call order.
+/// Output options shared by commands that render through `Terminal`.
+/// Threaded in explicitly so output behavior never depends on call order.
 struct GlobalOptions: ParsableArguments {
     @Option(name: .long, help: "颜色与 emoji 输出方式。")
     var color: Terminal.ColorMode = .auto
 
-    @Flag(name: .shortAndLong, help: "输出更多细节。")
-    var verbose: Bool = false
-
-    @Flag(name: .shortAndLong, help: "只输出错误信息，不输出过程提示。")
+    @Flag(name: .shortAndLong, help: "隐藏过程提示，保留最终结果。")
     var quiet: Bool = false
 
     func makeTerminal() -> Terminal {
-        Terminal(colorMode: color, verbose: verbose, quiet: quiet)
+        Terminal(colorMode: color, quiet: quiet)
     }
 }
 
@@ -87,10 +83,6 @@ public enum SignalLightCLIEntry {
         // going through `parseAsRoot`/`parse`), so this path must never touch
         // `GlobalOptions` before an actual parse happens.
         let arguments = Array(CommandLine.arguments.dropFirst())
-        if let help = localizedHelp(arguments: arguments) {
-            print(help)
-            return
-        }
         if arguments.isEmpty {
             let terminal = Terminal(colorMode: .auto)
             if terminal.isInteractive {
@@ -101,6 +93,12 @@ public enum SignalLightCLIEntry {
         }
 
         do {
+            if let error = legacyHelpSyntaxError(arguments: arguments) { throw error }
+            if let help = localizedHelp(arguments: arguments) {
+                print(help)
+                return
+            }
+
             var command = try SignalLightCLI.parseAsRoot()
             if var asyncCommand = command as? AsyncParsableCommand {
                 try await asyncCommand.run()
@@ -120,12 +118,10 @@ public enum SignalLightCLIEntry {
         }
     }
 
-    private static func localizedHelp(arguments: [String]) -> String? {
-        guard arguments.contains(where: { ["--help", "-h"].contains($0) })
-            || arguments.first == "help"
-        else { return nil }
+    static func localizedHelp(arguments: [String]) -> String? {
+        guard arguments.contains(where: { ["--help", "-h"].contains($0) }) else { return nil }
 
-        let commandArguments = arguments.filter { !$0.hasPrefix("-") && $0 != "help" }
+        let commandArguments = arguments.filter { !$0.hasPrefix("-") }
         var command: ParsableCommand.Type = SignalLightCLI.self
         for name in commandArguments {
             guard let next = command.configuration.subcommands.first(where: {
@@ -168,5 +164,10 @@ public enum SignalLightCLIEntry {
             .replacingOccurrences(of: "SUBCOMMANDS:", with: "子命令：")
             .replacingOccurrences(of: "。 （", with: "。（")
         return message
+    }
+
+    static func legacyHelpSyntaxError(arguments: [String]) -> CLIError? {
+        guard arguments.first == "help" else { return nil }
+        return CLIError("帮助请使用 --help 查看。", exitCode: .usage)
     }
 }
