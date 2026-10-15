@@ -173,6 +173,43 @@ struct SessionRegistryTests {
         #expect(restored.sessions.map(\.lastEventAt) == [start, start])
     }
 
+    @Test("Sessions older than the retention window are discarded on restore")
+    func staleSessionsAreDiscardedOnRestore() async {
+        let timestamp = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(timestamp.addingTimeInterval(25 * 60 * 60))
+        let registry = SessionRegistry(restoring: [
+            SessionRegistry.SessionStatus(
+                source: .claude,
+                sessionID: "stale",
+                phase: .running,
+                lastEventAt: timestamp
+            ),
+        ], now: { clock.now })
+
+        #expect(await registry.snapshot().isEmpty)
+    }
+
+    @Test("Future-dated and empty sessions are discarded on restore")
+    func invalidSessionsAreDiscardedOnRestore() async {
+        let timestamp = Date(timeIntervalSince1970: 1_000_000)
+        let registry = SessionRegistry(restoring: [
+            SessionRegistry.SessionStatus(
+                source: .claude,
+                sessionID: "future",
+                phase: .running,
+                lastEventAt: timestamp.addingTimeInterval(60)
+            ),
+            SessionRegistry.SessionStatus(
+                source: .codex,
+                sessionID: "  \n",
+                phase: .idle,
+                lastEventAt: timestamp
+            ),
+        ], now: { timestamp })
+
+        #expect(await registry.snapshot().isEmpty)
+    }
+
     @Test("A legacy Codex approval without an event time restores as idle")
     func legacyCodexApprovalRestoresIdle() async {
         let registry = SessionRegistry(restoring: [

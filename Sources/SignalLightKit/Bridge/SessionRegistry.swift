@@ -63,13 +63,21 @@ public actor SessionRegistry {
         fallbackLastEventAt: Date? = nil,
         now: @escaping @Sendable () -> Date = { .now }
     ) {
-        sessions = Dictionary(statuses.map { status in
+        let restorationTime = now()
+        let cutoff = restorationTime.addingTimeInterval(-Self.idleLifetime)
+        sessions = Dictionary(statuses.compactMap { status in
+            let updatedAt = status.lastEventAt ?? fallbackLastEventAt ?? .distantPast
+            guard !status.sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  updatedAt >= cutoff,
+                  updatedAt <= restorationTime else {
+                return nil
+            }
             let phase = Self.restoredPhase(for: status)
             let session = Session(
                 source: status.source,
                 sessionID: status.sessionID,
                 phase: phase,
-                updatedAt: status.lastEventAt ?? fallbackLastEventAt ?? .distantPast
+                updatedAt: updatedAt
             )
             return (Self.key(for: status.source, sessionID: status.sessionID), session)
         }, uniquingKeysWith: { _, latest in latest })

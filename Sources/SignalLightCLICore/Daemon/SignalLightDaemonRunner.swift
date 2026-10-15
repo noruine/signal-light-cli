@@ -239,7 +239,8 @@ private actor ShutdownCoordinator {
 /// Merges BLE connection updates and bucket-resolution updates into the
 /// single `state.json` snapshot `status` reads. The two arrive from
 /// independent asynchronous sources (the BLE queue, and the bridge observer
-/// loop) that must not race each other writing the same file.
+/// loop) that must not race each other writing the same file. Periodic session
+/// refreshes also save pruning when the bucket stays unchanged.
 final class DaemonStateWriter: @unchecked Sendable {
     private let paths: SignalLightDaemonPaths
     private let saveState: @Sendable (SignalLightDaemonState) -> Void

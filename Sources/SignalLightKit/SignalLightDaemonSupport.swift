@@ -298,9 +298,8 @@ public enum SignalLightDeviceStore {
     }
 }
 
-/// Low-frequency runtime snapshot the daemon writes so a separate `status`
-/// invocation can report BLE/bucket state without talking to the daemon
-/// process directly. Written only on change, never on a timer.
+/// Runtime snapshot the daemon writes so a separate `status` invocation can
+/// report BLE/bucket state without talking to the daemon process directly.
 public struct SignalLightDaemonState: Codable, Sendable, Equatable {
     public enum BLE: String, Codable, Sendable {
         case unauthorized
