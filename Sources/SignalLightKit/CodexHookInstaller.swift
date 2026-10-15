@@ -107,7 +107,8 @@ public enum CodexHookInstaller {
 
     public static func installHooksJSON(
         existingData: Data?,
-        hookCommand: String
+        hookCommand: String,
+        previousHookCommand: String? = nil
     ) throws -> CodexHookFileMutation {
         var rootObject = try loadRootObject(from: existingData)
         if let hooks = rootObject["hooks"], !(hooks is [String: Any]) {
@@ -121,7 +122,11 @@ public enum CodexHookInstaller {
                 hooksObject[eventName] = value
                 continue
             }
-            let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
+            let cleanedGroups = sanitizeForInstall(
+                groups: existingGroups,
+                replacingCommand: hookCommand,
+                previousCommand: previousHookCommand
+            )
 
             if !cleanedGroups.isEmpty {
                 hooksObject[eventName] = cleanedGroups
@@ -133,7 +138,11 @@ public enum CodexHookInstaller {
                 throw CodexHookInstallerError.invalidHookStructure
             }
             let existingGroups = hooksObject[spec.name] as? [Any] ?? []
-            let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
+            let cleanedGroups = sanitizeForInstall(
+                groups: existingGroups,
+                replacingCommand: hookCommand,
+                previousCommand: previousHookCommand
+            )
             hooksObject[spec.name] = cleanedGroups + [
                 managedGroup(matcher: spec.matcher, hookCommand: hookCommand, timeout: spec.timeout)
             ]
@@ -363,7 +372,11 @@ public enum CodexHookInstaller {
         }
     }
 
-    private static func sanitizeForInstall(groups: [Any], replacingCommand: String) -> [Any] {
+    private static func sanitizeForInstall(
+        groups: [Any],
+        replacingCommand: String,
+        previousCommand: String?
+    ) -> [Any] {
         groups.compactMap { item -> Any? in
             guard var group = item as? [String: Any],
                   let existingHooks = group["hooks"] as? [Any] else {
@@ -373,6 +386,7 @@ public enum CodexHookInstaller {
             let filteredHooks = existingHooks.filter { hook in
                 guard let hook = hook as? [String: Any] else { return true }
                 return !isManagedHook(hook, managedCommand: replacingCommand)
+                    && !isManagedHook(hook, managedCommand: previousCommand)
             }
             guard filteredHooks.count != existingHooks.count else { return item }
             guard !filteredHooks.isEmpty else { return nil }

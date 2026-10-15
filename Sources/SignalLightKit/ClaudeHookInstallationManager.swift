@@ -87,6 +87,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let existingSettings = try readIfPresent(settingsURL)
+        let previousManifest = loadManifest(at: manifestURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -99,7 +100,8 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let command = ClaudeHookInstaller.hookCommand(for: managedHooksBinaryURL.path, source: hookSource)
         let mutation = try ClaudeHookInstaller.installSettingsJSON(
             existingData: existingSettings,
-            hookCommand: command
+            hookCommand: command,
+            previousHookCommand: previousManifest?.hookCommand
         )
 
         if mutation.changed {

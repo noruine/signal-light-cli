@@ -74,7 +74,8 @@ public enum ClaudeHookInstaller {
 
     public static func installSettingsJSON(
         existingData: Data?,
-        hookCommand: String
+        hookCommand: String,
+        previousHookCommand: String? = nil
     ) throws -> ClaudeHookFileMutation {
         var rootObject = try loadRootObject(from: existingData)
         if let hooks = rootObject["hooks"], !(hooks is [String: Any]) {
@@ -88,7 +89,11 @@ public enum ClaudeHookInstaller {
                 hooksObject[eventName] = value
                 continue
             }
-            let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
+            let cleanedGroups = sanitizeForInstall(
+                groups: existingGroups,
+                replacingCommand: hookCommand,
+                previousCommand: previousHookCommand
+            )
 
             if !cleanedGroups.isEmpty {
                 hooksObject[eventName] = cleanedGroups
@@ -100,7 +105,11 @@ public enum ClaudeHookInstaller {
                 throw ClaudeHookInstallerError.invalidHookStructure
             }
             let existingGroups = hooksObject[spec.name] as? [Any] ?? []
-            let cleanedGroups = sanitizeForInstall(groups: existingGroups, replacingCommand: hookCommand)
+            let cleanedGroups = sanitizeForInstall(
+                groups: existingGroups,
+                replacingCommand: hookCommand,
+                previousCommand: previousHookCommand
+            )
             hooksObject[spec.name] = cleanedGroups + [managedGroup(matcher: spec.matcher, timeout: spec.timeout, hookCommand: hookCommand)]
         }
 
@@ -233,7 +242,11 @@ public enum ClaudeHookInstaller {
         }
     }
 
-    private static func sanitizeForInstall(groups: [Any], replacingCommand: String) -> [Any] {
+    private static func sanitizeForInstall(
+        groups: [Any],
+        replacingCommand: String,
+        previousCommand: String?
+    ) -> [Any] {
         groups.compactMap { item -> Any? in
             guard var group = item as? [String: Any],
                   let existingHooks = group["hooks"] as? [Any] else {
@@ -243,6 +256,7 @@ public enum ClaudeHookInstaller {
             let filteredHooks = existingHooks.filter { hook in
                 guard let hook = hook as? [String: Any] else { return true }
                 return !isManagedHook(hook, managedCommand: replacingCommand)
+                    && !isManagedHook(hook, managedCommand: previousCommand)
             }
             guard filteredHooks.count != existingHooks.count else { return item }
             guard !filteredHooks.isEmpty else { return nil }

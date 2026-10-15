@@ -142,6 +142,27 @@ public actor SessionRegistry {
         onStateChange(summary(at: timestamp))
     }
 
+    func nextRefreshDelay(at timestamp: Date? = nil) -> TimeInterval? {
+        let timestamp = timestamp ?? now()
+        let deadlines = sessions.values.map { session -> Date in
+            switch session.phase {
+            case .running:
+                let runningDeadline = session.updatedAt.addingTimeInterval(Self.runningLifetime)
+                if timestamp <= runningDeadline {
+                    return runningDeadline
+                }
+                return session.updatedAt.addingTimeInterval(Self.idleLifetime)
+            case .waitingForApproval, .waitingForAnswer:
+                return session.updatedAt.addingTimeInterval(Self.attentionLifetime)
+            case .idle:
+                return session.updatedAt.addingTimeInterval(Self.idleLifetime)
+            }
+        }
+
+        guard let deadline = deadlines.min() else { return nil }
+        return max(0, deadline.timeIntervalSince(timestamp))
+    }
+
     public func bucket(at timestamp: Date? = nil) -> SignalLightBucket {
         summary(at: timestamp).bucket
     }

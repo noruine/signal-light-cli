@@ -18,9 +18,10 @@ enum StatusMonitor {
         let trail = CLIRuntimeContext.menuTrail
         let footer = terminal.keyBar([.escape("返回")])
         ScreenLayout.beginStep()
+        var snapshot = StatusSnapshot.current(paths: .current())
 
         while true {
-            let snapshot = StatusSnapshot.current(paths: .current())
+            snapshot = snapshot.refreshingRuntimeState()
             ScreenLayout.paint(ScreenLayout.lines(
                 terminal: terminal,
                 trail: trail,

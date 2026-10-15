@@ -173,6 +173,51 @@ struct MenuChromeTests {
         ))
     }
 
+    @Test("Interactive refresh reloads daemon state without replacing menu metadata")
+    func refreshRuntimeState() throws {
+        let home = URL(fileURLWithPath: "/tmp/sl-status-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let paths = SignalLightDaemonPaths(home: home)
+        let pid = Int(ProcessInfo.processInfo.processIdentifier)
+        let initialState = SignalLightDaemonState(
+            ble: .connected,
+            deviceName: "blinkenlights",
+            currentBucket: "idle",
+            sessions: [],
+            updatedAt: .now,
+            pid: pid
+        )
+        let updatedState = SignalLightDaemonState(
+            ble: .connected,
+            deviceName: "blinkenlights",
+            currentBucket: "running",
+            sessions: [
+                SessionRegistry.SessionStatus(source: .codex, sessionID: "working", phase: .running),
+            ],
+            updatedAt: .now,
+            pid: pid
+        )
+        try SignalLightDaemonStateStore.save(updatedState, to: paths.stateJSONURL)
+        let snapshot = StatusSnapshot(
+            paths: paths,
+            jobInfo: LaunchAgentControl.JobInfo(isLoaded: true, pid: pid),
+            runAtLoad: true,
+            toolInstalled: true,
+            state: initialState,
+            stateIsLive: true,
+            pairedDeviceName: "blinkenlights",
+            deviceName: "blinkenlights",
+            hookedAgents: ["Codex"]
+        )
+
+        let refreshed = snapshot.refreshingRuntimeState()
+
+        #expect(refreshed.state?.currentBucket == "running")
+        #expect(refreshed.state?.sessions?.count == 1)
+        #expect(refreshed.hookedAgents == ["Codex"])
+        #expect(refreshed.runAtLoad == true)
+    }
+
     @Test("A stale daemon snapshot does not expose its update timestamp")
     func staleStatusOmitsStateTimestamp() {
         let state = SignalLightDaemonState(

@@ -11,8 +11,9 @@ public actor HookListener {
     private let registry: SessionRegistry
     private let onStateChange: @Sendable (SessionRegistry.Summary) -> Void
     private let acceptQueue = DispatchQueue(label: "app.signal-light.hook-listener")
-    private let connectionQueue = DispatchQueue(label: "app.signal-light.hook-connections", attributes: .concurrent)
+    private let connectionQueue = DispatchQueue(label: "app.signal-light.hook-connections")
     private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration = 0
     private var listenFD: Int32 = -1
     private var acceptSource: (any DispatchSourceRead)?
     private var socketIdentity: (device: dev_t, inode: ino_t)?
@@ -31,7 +32,7 @@ public actor HookListener {
 
     /// Binds the socket and starts accepting, throwing if the bind fails so a
     /// busy port surfaces here instead of as a silently deaf daemon.
-    public func start() throws {
+    public func start() async throws {
         stop()
 
         try FileManager.default.createDirectory(
@@ -75,7 +76,13 @@ public actor HookListener {
         _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
 
         let registry = registry
-        let onStateChange = onStateChange
+        let stateChangeCallback = onStateChange
+        let onEventStateChange: @Sendable (SessionRegistry.Summary) -> Void = { [weak self] summary in
+            stateChangeCallback(summary)
+            Task { [weak self] in
+                await self?.scheduleRefresh()
+            }
+        }
         let connectionQueue = connectionQueue
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: acceptQueue)
         source.setEventHandler {
@@ -83,29 +90,25 @@ public actor HookListener {
                 let client = accept(fd, nil, nil)
                 guard client >= 0 else { break }  // EAGAIN once the queue drains
                 connectionQueue.async {
+                    let completion = DispatchSemaphore(value: 0)
                     Task {
-                        await Self.handle(client, registry: registry, onStateChange: onStateChange)
+                        await Self.handle(client, registry: registry, onStateChange: onEventStateChange)
+                        completion.signal()
                     }
+                    completion.wait()
                 }
             }
         }
         source.resume()
-
-        let refreshRegistry = registry
-        let refreshCallback = onStateChange
-        refreshTask = Task.detached {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-                guard !Task.isCancelled else { return }
-                await refreshRegistry.refresh(onStateChange: refreshCallback)
-            }
-        }
-
         listenFD = fd
         acceptSource = source
+
+        await registry.refresh(onStateChange: stateChangeCallback)
+        await scheduleRefresh()
     }
 
     public func stop() {
+        refreshGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
         acceptSource?.cancel()
@@ -115,6 +118,44 @@ public actor HookListener {
             listenFD = -1
         }
         removeOwnedSocket()
+    }
+
+    private func scheduleRefresh() async {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = nil
+
+        guard listenFD >= 0,
+              let delay = await registry.nextRefreshDelay(),
+              generation == refreshGeneration else {
+            return
+        }
+
+        refreshTask = Task { [weak self, registry, onStateChange] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            await self.refreshExpiredSessions(
+                generation: generation,
+                registry: registry,
+                onStateChange: onStateChange
+            )
+        }
+    }
+
+    private func refreshExpiredSessions(
+        generation: Int,
+        registry: SessionRegistry,
+        onStateChange: @escaping @Sendable (SessionRegistry.Summary) -> Void
+    ) async {
+        guard generation == refreshGeneration, listenFD >= 0 else { return }
+        refreshTask = nil
+        await registry.refresh(onStateChange: onStateChange)
+        await scheduleRefresh()
     }
 
     private func removeStaleSocket() throws {

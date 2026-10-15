@@ -54,6 +54,30 @@ struct HookIsolationTests {
         #expect(text.contains(foreignStatusMessage))
     }
 
+    @Test("Claude reinstall replaces only its previous command")
+    func claudeReinstallReplacesPreviousCommand() throws {
+        let previousCommand = "'/Users/tester/old/agent-hooks' --source claude"
+        let existing = try JSONSerialization.data(withJSONObject: [
+            "hooks": [
+                "Stop": [["hooks": [
+                    ["type": "command", "command": previousCommand],
+                    ["type": "command", "command": foreignCommand],
+                ]]],
+            ],
+        ])
+
+        let installed = try ClaudeHookInstaller.installSettingsJSON(
+            existingData: existing,
+            hookCommand: managedCommand,
+            previousHookCommand: previousCommand
+        )
+        let commands = try hookCommands(in: try #require(installed.contents))
+
+        #expect(!commands.contains(previousCommand))
+        #expect(commands.contains(managedCommand))
+        #expect(commands.contains(foreignCommand))
+    }
+
     @Test("Claude uninstall removes only the hook it wrote")
     func claudeUninstallRemovesOnlyOurs() throws {
         let installed = try ClaudeHookInstaller.installSettingsJSON(
@@ -201,6 +225,31 @@ struct HookIsolationTests {
         commands = try hookCommands(in: try #require(removed.contents))
         #expect(commands.contains(foreignCommand))
         #expect(!commands.contains(managedCommand))
+    }
+
+    @Test("Codex reinstall replaces only its previous command")
+    func codexReinstallReplacesPreviousCommand() throws {
+        let previousCommand = CodexHookInstaller.hookCommand(for: "/Users/tester/old/agent-hooks")
+        let currentCommand = CodexHookInstaller.hookCommand(for: "/Users/tester/new/agent-hooks")
+        let existing = try JSONSerialization.data(withJSONObject: [
+            "hooks": [
+                "Stop": [["hooks": [
+                    ["type": "command", "command": previousCommand],
+                    ["type": "command", "command": foreignCommand],
+                ]]],
+            ],
+        ])
+
+        let installed = try CodexHookInstaller.installHooksJSON(
+            existingData: existing,
+            hookCommand: currentCommand,
+            previousHookCommand: previousCommand
+        )
+        let commands = try hookCommands(in: try #require(installed.contents))
+
+        #expect(!commands.contains(previousCommand))
+        #expect(commands.contains(currentCommand))
+        #expect(commands.contains(foreignCommand))
     }
 
     @Test("Codex session starts include fork and exclude compaction")

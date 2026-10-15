@@ -89,6 +89,32 @@ struct StatusSnapshot {
         )
     }
 
+    /// Refreshes daemon-written fields without re-running `launchctl` or
+    /// re-reading device and hook configuration on an interactive timer.
+    func refreshingRuntimeState() -> StatusSnapshot {
+        let state = try? SignalLightDaemonStateStore.load(from: paths.stateJSONURL)
+        let livePID = jobInfo.pid.flatMap { Self.isProcessAlive($0) ? $0 : nil }
+        let refreshedJobInfo = LaunchAgentControl.JobInfo(isLoaded: jobInfo.isLoaded, pid: livePID)
+        let stateIsLive = Self.isStateLive(
+            state,
+            jobInfo: refreshedJobInfo,
+            processIsAlive: { $0 == livePID }
+        )
+        let deviceName = stateIsLive ? (state?.deviceName ?? pairedDeviceName) : pairedDeviceName
+
+        return StatusSnapshot(
+            paths: paths,
+            jobInfo: refreshedJobInfo,
+            runAtLoad: runAtLoad,
+            toolInstalled: toolInstalled,
+            state: state,
+            stateIsLive: stateIsLive,
+            pairedDeviceName: pairedDeviceName,
+            deviceName: deviceName,
+            hookedAgents: hookedAgents
+        )
+    }
+
     /// Live ⇒ the snapshot's writer is still alive. Files written before the
     /// `pid` field existed fall back to "the launchd job is loaded", the best
     /// signal an old snapshot can offer.

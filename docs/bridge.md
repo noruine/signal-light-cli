@@ -5,7 +5,7 @@
 
 ## 事件传递
 
-每次钩子运行时建立一条 Unix 套接字连接，并发送一行 JSON。守护进程应用事件后回一行
+每次钩子运行时建立一条 Unix 套接字连接，并发送一行 JSON。守护进程按连接接收顺序应用事件，完成后回一行
 `{"ok":true}` 并关闭连接；收到回执表示事件已交给会话状态机处理。连接服务和等待回执各有两秒超时；
 服务不可用或超时都会静默退出。
 
@@ -38,7 +38,7 @@
 | Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Claude `Stop` / `StopFailure` | `Stop` / `StopFailure` | 当前轮次结束。 |
 | Claude `SessionEnd` | `SessionEnd` | 移除会话。 |
-| Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；`compact` 不匹配。 |
+| Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；映射层忽略 `compact`。 |
 | Codex `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 需要人工审批时等待审批；自动批准或不提示模式忽略。 |
 | Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为工作中。 |
@@ -75,7 +75,7 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 每个事件只更新所属会话，然后重新计算整盏灯的状态。因此，一个会话结束、变为空闲或被移除时，
 如果还有其他活动会话，灯会显示其中优先级最高的状态。
 
-工作中状态在两小时没有新事件后转为空闲；等待审批和等待回答在 24 小时没有新事件后转为空闲。守护进程每 30 秒检查过期状态，空闲记录最多保留 24 小时。会话状态和最后事件时间保存在 signal-light 自己的 `state.json` 中，服务重启后会恢复，并继续按上述规则过期。
+工作中状态在两小时没有新事件后转为空闲；等待审批和等待回答在 24 小时没有新事件后转为空闲。守护进程在最近一条会话记录到期时检查状态，空闲记录最多保留 24 小时；没有会话时不轮询。会话状态和最后事件时间保存在 signal-light 自己的 `state.json` 中，服务重启后会恢复，并继续按上述规则过期。
 
 ## 安装范围
 

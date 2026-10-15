@@ -249,6 +249,34 @@ struct SessionRegistryTests {
         #expect(recorder.values.map(\.bucket) == [.idle])
     }
 
+    @Test("Refresh waits until the next session transition")
+    func nextRefreshDelayTracksSessionTransitions() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(start)
+        let registry = SessionRegistry(now: { clock.now })
+
+        #expect(await registry.nextRefreshDelay() == nil)
+
+        _ = await registry.apply(event(.userPromptSubmit))
+        #expect(await registry.nextRefreshDelay() == 2 * 60 * 60)
+
+        clock.advance(by: 3 * 60 * 60)
+        #expect(await registry.nextRefreshDelay() == 21 * 60 * 60)
+    }
+
+    @Test("A new event moves the scheduled session expiry")
+    func newEventMovesNextRefreshDelay() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(start)
+        let registry = SessionRegistry(now: { clock.now })
+        _ = await registry.apply(event(.userPromptSubmit))
+
+        clock.advance(by: 60 * 60)
+        _ = await registry.apply(event(.postToolUse))
+
+        #expect(await registry.nextRefreshDelay() == 2 * 60 * 60)
+    }
+
     @Test("A payload version the daemon does not know is dropped")
     func unknownVersionsAreIgnored() async throws {
         let registry = SessionRegistry()

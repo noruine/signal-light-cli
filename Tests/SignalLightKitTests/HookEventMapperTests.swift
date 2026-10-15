@@ -75,6 +75,19 @@ struct HookEventMapperTests {
         #expect(event.kind == .permissionRequest)
     }
 
+    @Test("Codex compaction does not reset the session to idle")
+    func codexCompactionSessionStart() throws {
+        let compact = try decodeCodex(
+            #"{"hook_event_name":"SessionStart","session_id":"c1","cwd":"/tmp","source":"compact"}"#
+        )
+        let startup = try decodeCodex(
+            #"{"hook_event_name":"SessionStart","session_id":"c1","cwd":"/tmp","source":"startup"}"#
+        )
+
+        #expect(HookEventMapper.event(from: compact) == nil)
+        #expect(HookEventMapper.event(from: startup)?.kind == .sessionStart)
+    }
+
     @Test("Codex automatic permission modes do not wait for approval")
     func codexAutomaticPermissionModes() throws {
         for mode in ["bypassPermissions", "dontAsk"] {

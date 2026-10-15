@@ -90,6 +90,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
 
         let existingConfig = try readTextIfPresent(configURL) ?? ""
         let existingHooks = try readIfPresent(hooksURL)
+        let previousManifest = loadManifest(at: manifestURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -103,7 +104,11 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
             in: existingConfig,
             preferredKey: featureKeyProvider()
         )
-        let hooksMutation = try CodexHookInstaller.installHooksJSON(existingData: existingHooks, hookCommand: command)
+        let hooksMutation = try CodexHookInstaller.installHooksJSON(
+            existingData: existingHooks,
+            hookCommand: command,
+            previousHookCommand: previousManifest?.hookCommand
+        )
 
         if featureMutation.changed {
             if fileManager.fileExists(atPath: configURL.path) {

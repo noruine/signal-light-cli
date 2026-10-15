@@ -13,6 +13,7 @@ import SignalLightKit
 enum InteractiveMenu {
     static func run(terminal: Terminal) async {
         let paths = SignalLightDaemonPaths.current()
+        var snapshot = StatusSnapshot.current(paths: paths)
 
         await MenuScreenBuffer.withAlternateBuffer {
             await MenuLoop.run(
@@ -20,7 +21,7 @@ enum InteractiveMenu {
                 escapeHint: .escape("退出"),
                 refreshInterval: 1,
                 context: {
-                    let snapshot = StatusSnapshot.current(paths: paths)
+                    snapshot = snapshot.refreshingRuntimeState()
                     var lines = snapshot.menuHeaderLines(terminal: terminal)
                     if let hint = nextStepHint(paths: paths, snapshot: snapshot) {
                         lines.append("\(terminal.emoji(CLIGlyph.next))\(hint)")
@@ -28,7 +29,7 @@ enum InteractiveMenu {
                     return lines
                 },
                 buildItems: {
-                    let snapshot = StatusSnapshot.current(paths: paths)
+                    snapshot = StatusSnapshot.current(paths: paths)
                     let state = MenuState(paths: paths, snapshot: snapshot)
                     return buildItems(state: state, snapshot: snapshot, paths: paths, terminal: terminal)
                 }
