@@ -25,20 +25,14 @@ make install
 
 ## 开始使用
 
-依次配对信号灯、启动服务并接入 Agent：
+运行 `signal-light` 打开交互菜单，按菜单提示完成设备配对、启动服务和接入 Agent。
+Codex 接入后，在 Codex 中运行 `/hooks` 并确认信任，钩子才会生效。
 
-```sh
-signal-light pair
-signal-light service start
-signal-light hooks install
-```
+服务默认不会在登录时自动启动。需要时，在菜单的「服务」中开启开机启动。
 
 - 配对时确认设备名称。附近有多盏灯时，请按名称或 UUID 选择；`--first` 只会在找到唯一设备时自动选择。
-- 服务默认不会在登录时自动启动。需要时运行 `signal-light service autostart enable`。
-- 在交互终端中，hooks 安装命令会让你选择 Agent；也可以指定 `claude` 或 `codex`。
-- Codex 接入后，在 Codex 中运行 `/hooks` 并确认信任，钩子才会生效。
 
-直接运行 `signal-light` 可打开交互菜单。常用命令：
+需要直接执行命令时：
 
 | 用途 | 命令 |
 | --- | --- |
