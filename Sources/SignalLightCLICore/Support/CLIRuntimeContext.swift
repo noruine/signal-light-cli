@@ -13,6 +13,18 @@
 enum CLIRuntimeContext {
     nonisolated(unsafe) static var isMenuSession = false
 
+    nonisolated(unsafe) private static var shouldExitMenuAfterAction = false
+
+    static func requestMenuExitAfterAction() {
+        guard isMenuSession else { return }
+        shouldExitMenuAfterAction = true
+    }
+
+    static func consumeMenuExitAfterAction() -> Bool {
+        defer { shouldExitMenuAfterAction = false }
+        return shouldExitMenuAfterAction
+    }
+
     /// The menu path the current action hangs under, set by `MenuLoop` around
     /// every action: screens a command opens (the pairing scan, its device
     /// picker) continue this trail in their crosshairs instead of inventing a

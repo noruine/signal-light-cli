@@ -58,9 +58,4 @@ enum SourceStamp {
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
-
-    /// The part of a stamp that messages show — enough to compare by eye.
-    static func abbreviated(_ stamp: String) -> String {
-        String(stamp.prefix(12))
-    }
 }

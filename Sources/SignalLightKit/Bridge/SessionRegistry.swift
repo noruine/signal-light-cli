@@ -17,11 +17,18 @@ public actor SessionRegistry {
         public let source: HookEvent.Source
         public let sessionID: String
         public let phase: Phase
+        public let lastEventAt: Date?
 
-        public init(source: HookEvent.Source, sessionID: String, phase: Phase) {
+        public init(
+            source: HookEvent.Source,
+            sessionID: String,
+            phase: Phase,
+            lastEventAt: Date? = nil
+        ) {
             self.source = source
             self.sessionID = sessionID
             self.phase = phase
+            self.lastEventAt = lastEventAt
         }
     }
 
@@ -43,8 +50,7 @@ public actor SessionRegistry {
     /// Attention can wait longer than active work, but must not survive a
     /// lost SessionEnd forever.
     private static let attentionLifetime: TimeInterval = 24 * 60 * 60
-    /// Idle sessions are kept only so a late `SessionEnd` has something to
-    /// land on; a day is plenty.
+    /// Idle sessions are kept long enough for a late `SessionEnd` to land.
     private static let idleLifetime: TimeInterval = 24 * 60 * 60
 
     private var sessions: [String: Session] = [:]
@@ -52,7 +58,21 @@ public actor SessionRegistry {
 
     /// - Parameter now: injectable clock, so staleness can be tested without
     ///   sleeping.
-    public init(now: @escaping @Sendable () -> Date = { .now }) {
+    public init(
+        restoring statuses: [SessionStatus] = [],
+        fallbackLastEventAt: Date? = nil,
+        now: @escaping @Sendable () -> Date = { .now }
+    ) {
+        sessions = Dictionary(statuses.map { status in
+            let phase = Self.restoredPhase(for: status)
+            let session = Session(
+                source: status.source,
+                sessionID: status.sessionID,
+                phase: phase,
+                updatedAt: status.lastEventAt ?? fallbackLastEventAt ?? .distantPast
+            )
+            return (Self.key(for: status.source, sessionID: status.sessionID), session)
+        }, uniquingKeysWith: { _, latest in latest })
         self.now = now
     }
 
@@ -124,7 +144,8 @@ public actor SessionRegistry {
             SessionStatus(
                 source: session.source,
                 sessionID: session.sessionID,
-                phase: isLive(session, at: timestamp) ? session.phase : .idle
+                phase: isLive(session, at: timestamp) ? session.phase : .idle,
+                lastEventAt: session.updatedAt
             )
         }.sorted {
             if $0.source != $1.source { return $0.source.rawValue < $1.source.rawValue }
@@ -148,7 +169,19 @@ public actor SessionRegistry {
     }
 
     private static func key(for event: HookEvent) -> String {
-        "\(event.source.rawValue):\(event.sessionID)"
+        key(for: event.source, sessionID: event.sessionID)
+    }
+
+    private static func key(for source: HookEvent.Source, sessionID: String) -> String {
+        "\(source.rawValue):\(sessionID)"
+    }
+
+    private static func restoredPhase(for status: SessionStatus) -> Phase {
+        // Older snapshots cannot prove a Codex approval is still pending.
+        if status.lastEventAt == nil, status.source == .codex, status.phase == .waitingForApproval {
+            return .idle
+        }
+        return status.phase
     }
 
     private func update(

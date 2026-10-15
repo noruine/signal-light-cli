@@ -133,7 +133,7 @@ enum ConfigMenu {
     /// Offers to push the just-edited effect straight to the physical device
     /// before it's saved — otherwise saving a bucket that isn't the one
     /// currently active gives zero visible feedback that anything happened
-    /// (e.g. editing "运行中" while the light is sitting idle). Skipped
+    /// (e.g. editing "工作中" while the light is sitting idle). Skipped
     /// silently when no device is paired: there's nothing to preview.
     private static func previewIfWanted(_ effect: SignalLightEffect, paths: SignalLightDaemonPaths, terminal: Terminal) async {
         guard let device = try? SignalLightDeviceStore.load(from: paths.deviceJSONURL),

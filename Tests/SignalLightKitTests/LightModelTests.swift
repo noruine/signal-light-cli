@@ -132,6 +132,14 @@ struct LightModelTests {
             ble: .connected,
             deviceName: "mylight",
             currentBucket: SignalLightBucket.needsApproval.rawValue,
+            sessions: [
+                SessionRegistry.SessionStatus(
+                    source: .codex,
+                    sessionID: "s1",
+                    phase: .waitingForApproval,
+                    lastEventAt: Date(timeIntervalSince1970: 1_699_999_000)
+                ),
+            ],
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
             pid: 4321
         )
@@ -140,5 +148,21 @@ struct LightModelTests {
         #expect(try SignalLightDaemonStateStore.load(from: url) == state)
 
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    @Test("Older daemon snapshots decode without per-session timestamps")
+    func legacyDaemonStateDecodes() throws {
+        let json = #"{"ble":"connected","deviceName":"mylight","currentBucket":"idle","sessions":[{"source":"codex","sessionID":"s1","phase":"idle"}],"updatedAt":"2023-11-14T22:13:20Z","pid":4321}"#
+        let state = try JSONDecoder.iso8601.decode(SignalLightDaemonState.self, from: Data(json.utf8))
+
+        #expect(state.sessions?.first?.lastEventAt == nil)
+    }
+}
+
+private extension JSONDecoder {
+    static var iso8601: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 }

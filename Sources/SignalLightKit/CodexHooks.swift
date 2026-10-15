@@ -7,19 +7,22 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
     public var sessionID: String
     public var terminalApp: String?
     public var transcriptPath: String?
+    public var permissionMode: String?
 
     public init(
         cwd: String,
         hookEventName: CodexHookEventName,
         sessionID: String,
         terminalApp: String? = nil,
-        transcriptPath: String? = nil
+        transcriptPath: String? = nil,
+        permissionMode: String? = nil
     ) {
         self.cwd = cwd
         self.hookEventName = hookEventName
         self.sessionID = sessionID
         self.terminalApp = terminalApp
         self.transcriptPath = transcriptPath
+        self.permissionMode = permissionMode
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -28,6 +31,7 @@ public struct CodexHookPayload: Codable, Sendable, Equatable {
         case sessionID = "session_id"
         case terminalApp = "terminal_app"
         case transcriptPath = "transcript_path"
+        case permissionMode = "permission_mode"
     }
 }
 

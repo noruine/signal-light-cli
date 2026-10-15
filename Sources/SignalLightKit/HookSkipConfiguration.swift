@@ -3,7 +3,7 @@ import Foundation
 /// The per-process skip switch wrappers use to keep one child out of the
 /// light — without changing the installed hooks.
 public enum HookSkipConfiguration {
-    public static let skipKey = "SIGNAL_LIGHT_SKIP_HOOKS"
+    public static let skipKey = SignalLightConfiguration.skipHooksEnvironmentKey
 
     public static func shouldSkipHooks(environment: [String: String]) -> Bool {
         isTruthy(environment[skipKey])

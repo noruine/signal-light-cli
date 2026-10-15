@@ -19,6 +19,7 @@ enum MenuSelector {
         items: [String],
         terminal: Terminal,
         trail: [String]?,
+        rootSuffix: String? = nil,
         context: () -> [String],
         footerHint: String,
         initialIndex: Int = 0,
@@ -30,7 +31,7 @@ enum MenuSelector {
         // stdin isn't a TTY (reused in a pipe/test), fall back to a plain
         // numbered prompt so the menu still works.
         guard let original = RawMode.enter() else {
-            return numberFallback(items: items, terminal: terminal, trail: trail, context: context)
+            return numberFallback(items: items, terminal: terminal, trail: trail, rootSuffix: rootSuffix, context: context)
         }
         defer {
             RawMode.restore(original)
@@ -42,14 +43,14 @@ enum MenuSelector {
 
         var selected = min(max(initialIndex, 0), items.count - 1)
         var currentContext = context()
-        render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
+        render(items: items, selected: selected, terminal: terminal, trail: trail, rootSuffix: rootSuffix, context: { currentContext }, footerHint: footerHint)
         while true {
             switch readKey(timeoutMilliseconds: refreshInterval.map { Int32($0 * 1000) }) {
             case .refresh:
                 let updatedContext = context()
                 if updatedContext != currentContext {
                     currentContext = updatedContext
-                    render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
+                    render(items: items, selected: selected, terminal: terminal, trail: trail, rootSuffix: rootSuffix, context: { currentContext }, footerHint: footerHint)
                 }
                 continue
             case .up:
@@ -70,7 +71,7 @@ enum MenuSelector {
                 continue  // ignore mouse reports and other unrelated input
             }
             currentContext = context()
-            render(items: items, selected: selected, terminal: terminal, trail: trail, context: { currentContext }, footerHint: footerHint)
+            render(items: items, selected: selected, terminal: terminal, trail: trail, rootSuffix: rootSuffix, context: { currentContext }, footerHint: footerHint)
         }
     }
 
@@ -81,6 +82,7 @@ enum MenuSelector {
         selected: Int,
         terminal: Terminal,
         trail: [String]?,
+        rootSuffix: String? = nil,
         context: () -> [String],
         footerHint: String,
         emit: (String) -> Void = { print($0, terminator: "") }
@@ -95,7 +97,7 @@ enum MenuSelector {
             }
         }
         ScreenLayout.paint(
-            ScreenLayout.lines(terminal: terminal, trail: trail, context: context(), body: body, bar: footerHint),
+            ScreenLayout.lines(terminal: terminal, trail: trail, rootSuffix: rootSuffix, context: context(), body: body, bar: footerHint),
             emit: emit
         )
     }
@@ -142,9 +144,9 @@ enum MenuSelector {
 
     // MARK: - Non-TTY fallback
 
-    private static func numberFallback(items: [String], terminal: Terminal, trail: [String]?, context: () -> [String]) -> Outcome {
+    private static func numberFallback(items: [String], terminal: Terminal, trail: [String]?, rootSuffix: String?, context: () -> [String]) -> Outcome {
         if let trail {
-            terminal.out(terminal.menuBreadcrumb(trail))
+            terminal.out(terminal.menuBreadcrumb(trail, rootSuffix: trail.isEmpty ? rootSuffix : nil))
         }
         for line in context() {
             terminal.out(line)

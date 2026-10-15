@@ -54,7 +54,7 @@ struct Config: AsyncParsableCommand {
 
         @OptionGroup var globals: GlobalOptions
 
-        @Argument(help: "状态：idle（空闲）/ running（运行中）/ needsApproval（等待审批）/ needsAnswer（等待回答）。")
+        @Argument(help: "状态：idle（空闲）/ running（工作中）/ needsApproval（等待审批）/ needsAnswer（等待回答）。")
         var bucket: String
 
         @Option(help: "灯效类型：solid（常亮）/ blink（闪烁）/ cycle（循环）/ breathe（呼吸）。")
@@ -191,7 +191,7 @@ enum SignalLightBucketDisplay {
     static func name(_ bucket: SignalLightBucket) -> String {
         switch bucket {
         case .idle: "空闲"
-        case .running: "运行中"
+        case .running: "工作中"
         case .needsApproval: "等待审批"
         case .needsAnswer: "等待回答"
         }

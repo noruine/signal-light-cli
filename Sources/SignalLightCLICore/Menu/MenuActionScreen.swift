@@ -9,8 +9,8 @@ final class MenuActionScreen: @unchecked Sendable {
     private let terminal: Terminal
     private let trail: [String]
     private let lock = NSLock()
-    private var body = ["正在处理…"]
-    private var footer = "正在处理…"
+    private var body: [String] = []
+    private var footer = ""
     private var progressLineIndex: Int?
 
     private init(terminal: Terminal, trail: [String]) {
@@ -28,8 +28,7 @@ final class MenuActionScreen: @unchecked Sendable {
         if let active, active.trail == trail {
             active.lock.lock()
             active.body.append("")
-            active.body.append("正在处理…")
-            active.footer = "正在处理…"
+            active.footer = ""
             active.progressLineIndex = nil
             active.render()
             active.lock.unlock()
@@ -37,13 +36,14 @@ final class MenuActionScreen: @unchecked Sendable {
         }
         let screen = MenuActionScreen(terminal: terminal, trail: trail)
         active = screen
-        screen.render()
+        // Wait for the command's first real line instead of showing a generic
+        // placeholder that can leak into an inline confirmation prompt.
     }
 
     static func append(_ text: String) -> Bool {
         update {
             let lines = text.components(separatedBy: "\n")
-            if $0.body == ["正在处理…"] {
+            if $0.body.isEmpty {
                 $0.body = lines
             } else {
                 $0.body.append(contentsOf: lines)
@@ -60,8 +60,8 @@ final class MenuActionScreen: @unchecked Sendable {
         update { screen in
             if let index = screen.progressLineIndex {
                 screen.body[index] = text
-            } else if screen.body == ["正在处理…"] {
-                screen.body[0] = text
+            } else if screen.body.isEmpty {
+                screen.body = [text]
                 screen.progressLineIndex = 0
             } else {
                 screen.body.append(text)

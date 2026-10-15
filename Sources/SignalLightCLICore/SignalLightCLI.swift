@@ -1,6 +1,7 @@
 import ArgumentParser
 import Darwin
 import Foundation
+import SignalLightKit
 
 // `Terminal.ColorMode` is `RawRepresentable` with `RawValue == String`, so
 // ArgumentParser's default `ExpressibleByArgument` extension for that shape
@@ -24,7 +25,7 @@ struct GlobalOptions: ParsableArguments {
 
 struct SignalLightCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "signal-light",
+        commandName: SignalLightConfiguration.cliExecutableName,
         abstract: "红绿灯后台服务：在终端里控制信号灯。",
         discussion: """
         直接运行不带任何参数的 signal-light 会进入交互菜单，跟着选就行。

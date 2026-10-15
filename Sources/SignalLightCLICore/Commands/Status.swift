@@ -178,7 +178,7 @@ struct StatusSnapshot {
     ) -> (total: Int, counts: [String])? {
         guard let sessions else { return nil }
         let phases: [(SessionRegistry.Phase, String)] = [
-            (.running, "运行中"),
+            (.running, "工作中"),
             (.waitingForApproval, "等待审批"),
             (.waitingForAnswer, "等待回答"),
             (.idle, "空闲"),

@@ -47,7 +47,11 @@ public enum HookEventMapper {
         switch payload.hookEventName {
         case .sessionStart: kind = .sessionStart
         case .userPromptSubmit: kind = .userPromptSubmit
-        case .permissionRequest: kind = .permissionRequest
+        case .permissionRequest:
+            if payload.permissionMode == "bypassPermissions" || payload.permissionMode == "dontAsk" {
+                return nil
+            }
+            kind = .permissionRequest
         case .postToolUse: kind = .postToolUse
         case .stop: kind = .stop
         case .sessionEnd: kind = .sessionEnd

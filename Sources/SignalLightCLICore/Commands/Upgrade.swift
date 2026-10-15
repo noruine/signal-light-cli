@@ -44,9 +44,7 @@ struct Upgrade: AsyncParsableCommand {
             // moved in ways that do not change codegen; either way the
             // installed binary is what this tree builds to, so the record
             // follows the source.
-            let identity = AppVersion.sourceIdentity()
-            let suffix = identity.map { "（\(AppVersion.display(version: $0.version, stamp: $0.stamp))）" } ?? ""
-            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已是最新\(suffix)。"))")
+            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已是最新。"))")
             Installation.recordBuildIdentity(paths: paths, terminal: terminal)
             return
         }
@@ -91,11 +89,12 @@ struct Upgrade: AsyncParsableCommand {
 
         let currentVersion = AppVersion.sourceVersion(repoRoot: repoRoot)
         if stamp == record.sourceStamp {
-            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已是最新（\(AppVersion.display(version: currentVersion, stamp: stamp))）。"))")
+            let version = currentVersion.map { "v\($0)" }.map { "（\($0)）" } ?? ""
+            terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("已是最新\(version)。"))")
             return
         }
 
-        let change = changeText(from: record, toVersion: currentVersion, toStamp: stamp)
+        let change = changeText(from: record, toVersion: currentVersion)
         guard terminal.isInteractive else {
             terminal.out("发现新代码 \(change)。要升级：在仓库里运行 make install。")
             return
@@ -115,21 +114,15 @@ struct Upgrade: AsyncParsableCommand {
         guard exitCode == 0 else {
             throw CLIError("构建或安装失败（make install 退出码 \(exitCode)）。", exitCode: .software)
         }
+        CLIRuntimeContext.requestMenuExitAfterAction()
     }
 
-    /// `v0.1.0 → v0.1.1` when the version moved; otherwise the version with
-    /// the two stamps in parentheses, so same-version edits still read as a
-    /// change instead of as nothing.
-    private func changeText(from record: BuildRecord, toVersion: String?, toStamp: String) -> String {
-        let fromStamp = SourceStamp.abbreviated(record.sourceStamp)
-        let toStamp = SourceStamp.abbreviated(toStamp)
+    /// Shows a version transition when available; source stamps stay internal.
+    private func changeText(from record: BuildRecord, toVersion: String?) -> String {
         if let old = record.sourceVersion, let new = toVersion, old != new {
             return "v\(old) → v\(new)"
         }
-        guard let new = toVersion else {
-            return "\(fromStamp) → \(toStamp)"
-        }
-        return "v\(new)（\(fromStamp) → \(toStamp)）"
+        return toVersion.map { "v\($0)" } ?? "有新代码"
     }
 
     /// Whether the running build is byte-identical to the installed copy.

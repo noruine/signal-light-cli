@@ -132,16 +132,58 @@ struct SessionRegistryTests {
 
     @Test("Session summary reports each session and the winning phase")
     func summaryReportsSessions() async {
-        let registry = SessionRegistry()
+        let timestamp = Date(timeIntervalSince1970: 1_000_000)
+        let registry = SessionRegistry(now: { timestamp })
         _ = await registry.apply(event(.userPromptSubmit, session: "work", source: .claude))
         _ = await registry.apply(event(.permissionRequest, session: "question", source: .codex, question: true))
 
         let summary = await registry.summary()
         #expect(summary.bucket == .needsAnswer)
         #expect(summary.sessions == [
-            SessionRegistry.SessionStatus(source: .claude, sessionID: "work", phase: .running),
-            SessionRegistry.SessionStatus(source: .codex, sessionID: "question", phase: .waitingForAnswer),
+            SessionRegistry.SessionStatus(
+                source: .claude,
+                sessionID: "work",
+                phase: .running,
+                lastEventAt: timestamp
+            ),
+            SessionRegistry.SessionStatus(
+                source: .codex,
+                sessionID: "question",
+                phase: .waitingForAnswer,
+                lastEventAt: timestamp
+            ),
         ])
+    }
+
+    @Test("Claude and Codex sessions survive a daemon restart")
+    func sessionsRestoreAfterRestart() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Clock(start)
+        let originalRegistry = SessionRegistry(now: { clock.now })
+        _ = await originalRegistry.apply(event(.userPromptSubmit, session: "active", source: .claude))
+        _ = await originalRegistry.apply(event(.sessionStart, session: "idle", source: .codex))
+
+        clock.advance(by: 3 * 60 * 60)
+        let savedSessions = await originalRegistry.summary().sessions
+        let restartedRegistry = SessionRegistry(restoring: savedSessions, now: { clock.now })
+        let restored = await restartedRegistry.summary()
+
+        #expect(restored.sessions.count == 2)
+        #expect(restored.sessions.map(\.phase) == [.idle, .idle])
+        #expect(restored.sessions.map(\.lastEventAt) == [start, start])
+    }
+
+    @Test("A legacy Codex approval without an event time restores as idle")
+    func legacyCodexApprovalRestoresIdle() async {
+        let registry = SessionRegistry(restoring: [
+            SessionRegistry.SessionStatus(
+                source: .codex,
+                sessionID: "legacy",
+                phase: .waitingForApproval
+            ),
+        ], fallbackLastEventAt: .now)
+
+        #expect(await registry.summary().bucket == .idle)
     }
 
     @Test("A running session that never ends goes idle after its lifetime")

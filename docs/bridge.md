@@ -35,13 +35,13 @@
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
-| Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为运行中。 |
+| Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Claude `Stop` / `StopFailure` | `Stop` / `StopFailure` | 当前轮次结束。 |
 | Claude `SessionEnd` | `SessionEnd` | 移除会话。 |
 | Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；`compact` 不匹配。 |
 | Codex `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
-| Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
-| Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为运行中。 |
+| Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 需要人工审批时等待审批；自动批准或不提示模式忽略。 |
+| Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Codex `Stop` / `Interrupt` | `Stop` / `Interrupt` | 当前轮次结束或中断。 |
 | Codex `SessionEnd` | `SessionEnd` | 移除会话。 |
 
@@ -55,28 +55,27 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 | 归一化事件 | 会话状态 |
 | --- | --- |
 | `SessionStart` | 空闲 |
-| `UserPromptSubmit` / `PostToolUse` | 运行中 |
+| `UserPromptSubmit` / `PostToolUse` | 工作中 |
 | `PermissionRequest`，`isQuestion: false` | 等待审批 |
 | `PermissionRequest`，`isQuestion: true` | 等待回答 |
 | `Stop` / `StopFailure` / `Interrupt` | 空闲 |
 | `SessionEnd` | 移除会话 |
 
 一盏灯无法分别显示多个会话，因此守护进程会汇总所有会话，只显示优先级最高的一种状态：
-**等待审批 > 等待回答 > 运行中 > 空闲**。空闲会话不影响其他会话。`signal-light status`
+**等待审批 > 等待回答 > 工作中 > 空闲**。空闲会话不影响其他会话。`signal-light status`
 和交互模式的状态页会列出各状态的会话数；交互模式每秒刷新一次状态。
 
 | 会话 A | 会话 B | 灯显示 |
 | --- | --- | --- |
-| 运行中 | 空闲 | 运行中 |
-| 运行中 | 等待回答 | 等待回答 |
+| 工作中 | 空闲 | 工作中 |
+| 工作中 | 等待回答 | 等待回答 |
 | 等待回答 | 等待审批 | 等待审批 |
-| 运行中 | 结束或移除 | 运行中 |
+| 工作中 | 结束或移除 | 工作中 |
 
 每个事件只更新所属会话，然后重新计算整盏灯的状态。因此，一个会话结束、变为空闲或被移除时，
 如果还有其他活动会话，灯会显示其中优先级最高的状态。
 
-运行中状态在两小时没有新事件后过期；等待审批和等待回答在 24 小时没有新事件后过期。
-守护进程每 30 秒检查过期状态。过期会话转为空闲，空闲记录最多保留 24 小时，因此状态页的统计也会显示这些记录。会话状态只保存在守护进程内存中；服务重启后，已有会话不会自动恢复，需等 Agent 发来下一条钩子事件。
+工作中状态在两小时没有新事件后转为空闲；等待审批和等待回答在 24 小时没有新事件后转为空闲。守护进程每 30 秒检查过期状态，空闲记录最多保留 24 小时。会话状态和最后事件时间保存在 signal-light 自己的 `state.json` 中，服务重启后会恢复，并继续按上述规则过期。
 
 ## 安装范围
 

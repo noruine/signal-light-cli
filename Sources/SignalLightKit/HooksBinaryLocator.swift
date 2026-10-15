@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ManagedHooksBinary {
-    public static let binaryName = "agent-hooks"
+    public static let binaryName = SignalLightConfiguration.hooksExecutableName
 
     public static func defaultURL(fileManager: FileManager = .default) -> URL {
         installDirectory(fileManager: fileManager)
@@ -73,7 +73,7 @@ public enum ManagedHooksBinary {
     /// `agent-hooks` copy, resolved against the real home.
     private static func installDirectory(fileManager: FileManager) -> URL {
         fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent(".signal-light", isDirectory: true)
+            .appendingPathComponent(SignalLightConfiguration.cliDirectoryName, isDirectory: true)
             .appendingPathComponent("bin", isDirectory: true)
     }
 }
@@ -91,13 +91,15 @@ public enum ManagedHooksBinaryError: Error, LocalizedError, Equatable {
 }
 
 public enum HooksBinaryLocator {
+    public static let binaryName = SignalLightConfiguration.hooksExecutableName
+
     public static func locate(
         fileManager: FileManager = .default,
         currentDirectory: URL? = nil,
         executableDirectory: URL? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL? {
-        if let explicitPath = environment["SIGNAL_LIGHT_HOOKS_BINARY"],
+        if let explicitPath = environment[SignalLightConfiguration.hooksBinaryEnvironmentKey],
            fileManager.isExecutableFile(atPath: explicitPath) {
             return URL(fileURLWithPath: explicitPath).standardizedFileURL
         }
@@ -105,9 +107,9 @@ public enum HooksBinaryLocator {
         let currentDirectory = currentDirectory
             ?? URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         let candidates = [
-            executableDirectory?.appendingPathComponent("agent-hooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("agent-hooks"),
-            executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/agent-hooks"),
+            executableDirectory?.appendingPathComponent(Self.binaryName),
+            executableDirectory?.deletingLastPathComponent().appendingPathComponent(Self.binaryName),
+            executableDirectory?.deletingLastPathComponent().appendingPathComponent("Helpers/\(Self.binaryName)"),
         ].compactMap { $0 } + ManagedHooksBinary.candidateURLs(fileManager: fileManager) + {
             #if arch(arm64)
             let archTriple = "arm64-apple-macosx"
@@ -115,10 +117,10 @@ public enum HooksBinaryLocator {
             let archTriple = "x86_64-apple-macosx"
             #endif
             return [
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/release/agent-hooks"),
-                currentDirectory.appendingPathComponent(".build/release/agent-hooks"),
-                currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/agent-hooks"),
-                currentDirectory.appendingPathComponent(".build/debug/agent-hooks"),
+                currentDirectory.appendingPathComponent(".build/\(archTriple)/release/\(Self.binaryName)"),
+                currentDirectory.appendingPathComponent(".build/release/\(Self.binaryName)"),
+                currentDirectory.appendingPathComponent(".build/\(archTriple)/debug/\(Self.binaryName)"),
+                currentDirectory.appendingPathComponent(".build/debug/\(Self.binaryName)"),
             ]
         }()
 

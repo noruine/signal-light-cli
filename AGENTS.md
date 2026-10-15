@@ -62,7 +62,7 @@
 ```bash
 echo '{"hook_event_name":"UserPromptSubmit","session_id":"smoke","cwd":"/tmp"}' \
   | .build/release/agent-hooks --source claude
-.build/release/signal-light status   # 状态应变为运行中
+.build/release/signal-light status   # 状态应变为工作中
 echo '{"hook_event_name":"Stop","session_id":"smoke","cwd":"/tmp"}' \
   | .build/release/agent-hooks --source claude
 ```

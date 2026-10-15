@@ -65,8 +65,9 @@ extension Terminal {
     /// `🚦  信号灯 › 诊断 › 查看文件清单` (root alone: `🚦  信号灯`) — the fixed
     /// top line of every screen: one glyph, plain segment names, one
     /// separator style. Only the body of a screen is allowed to differ.
-    public func menuBreadcrumb(_ trail: [String] = []) -> String {
-        let segments = ["信号灯"] + trail
+    public func menuBreadcrumb(_ trail: [String] = [], rootSuffix: String? = nil) -> String {
+        let root = rootSuffix.map { "信号灯 \($0)" } ?? "信号灯"
+        let segments = [root] + trail
         return "\(emoji(CLIGlyph.trafficLight))\(segments.joined(separator: " \(dimmed("›")) "))"
     }
 
@@ -115,13 +116,14 @@ public enum ScreenLayout {
     public static func lines(
         terminal: Terminal,
         trail: [String]?,
+        rootSuffix: String? = nil,
         context: [String],
         body: [String],
         bar: String
     ) -> [String] {
         var lines: [String] = []
         if let trail {
-            lines.append(terminal.menuBreadcrumb(trail))
+            lines.append(terminal.menuBreadcrumb(trail, rootSuffix: trail.isEmpty ? rootSuffix : nil))
         }
         if !context.isEmpty {
             if !lines.isEmpty {

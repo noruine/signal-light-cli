@@ -45,11 +45,12 @@ public struct SignalLightDaemonPaths: Sendable {
     /// over) the real user's job. The override mirrors the hooks binary's
     /// `SIGNAL_LIGHT_HOOKS_BINARY`, which exists for the same reason.
     public static func launchAgentLabel(environment: [String: String]) -> String {
-        environment["SIGNAL_LIGHT_LAUNCHD_LABEL"] ?? "app.signal-light.daemon"
+        environment[SignalLightConfiguration.launchAgentLabelEnvironmentKey]
+            ?? SignalLightConfiguration.launchAgentLabel
     }
 
     public var cliRootDir: URL {
-        home.appendingPathComponent(".signal-light", isDirectory: true)
+        home.appendingPathComponent(SignalLightConfiguration.cliDirectoryName, isDirectory: true)
     }
 
     public var binDir: URL {
@@ -62,7 +63,7 @@ public struct SignalLightDaemonPaths: Sendable {
     /// are lowercase: `signal-light`, `agent-hooks`). `install` copies
     /// the build product here under this shorter name.
     public var binURL: URL {
-        binDir.appendingPathComponent("signal-light")
+        binDir.appendingPathComponent(SignalLightConfiguration.cliExecutableName)
     }
 
     /// A symlink at the XDG-conventional user-binary directory pointing at
@@ -78,14 +79,14 @@ public struct SignalLightDaemonPaths: Sendable {
     }
 
     public var pathSymlinkURL: URL {
-        pathSymlinkDir.appendingPathComponent("signal-light")
+        pathSymlinkDir.appendingPathComponent(SignalLightConfiguration.cliExecutableName)
     }
 
     /// This CLI's own private copy of the `agent-hooks` binary, used by
     /// `hooks install <agent>`. Also the default install target of
     /// `ManagedHooksBinary`, so both live under this CLI's own root.
     public var hooksBinaryURL: URL {
-        binDir.appendingPathComponent("agent-hooks")
+        binDir.appendingPathComponent(SignalLightConfiguration.hooksExecutableName)
     }
 
     public var deviceJSONURL: URL {
@@ -112,7 +113,7 @@ public struct SignalLightDaemonPaths: Sendable {
     }
 
     public var userDir: URL {
-        home.appendingPathComponent(".signal-light", isDirectory: true)
+        cliRootDir
     }
 
     /// Where `sign` keeps the local self-signed certificate (the private key

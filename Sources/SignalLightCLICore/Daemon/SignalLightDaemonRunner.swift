@@ -45,6 +45,13 @@ enum SignalLightDaemonRunner {
         }
 
         let stateWriter = DaemonStateWriter(paths: paths)
+        let previousState: SignalLightDaemonState?
+        do {
+            previousState = try SignalLightDaemonStateStore.load(from: paths.stateJSONURL)
+        } catch {
+            log.log(.warn, "failed to restore prior session state: \(error.localizedDescription)")
+            previousState = nil
+        }
 
         let bleDaemon = SignalLightBLEDaemon(pairedDeviceID: deviceID, log: log)
         bleDaemon.onStateChange = { state in
@@ -69,12 +76,21 @@ enum SignalLightDaemonRunner {
         let controller = LightController(bleDaemon: bleDaemon, settingsURL: paths.settingsJSONURL, log: log)
         controller.reloadSettings()
 
-        let registry = SessionRegistry()
-        let hookListener = HookListener(socketURL: paths.bridgeSocketURL, registry: registry) { summary in
+        let registry = SessionRegistry(
+            restoring: previousState?.sessions ?? [],
+            fallbackLastEventAt: previousState?.updatedAt
+        )
+        let onSessionStateChange: @Sendable (SessionRegistry.Summary) -> Void = { summary in
             controller.applyBucket(summary.bucket)
             stateWriter.updateSessionSummary(summary)
         }
+        let hookListener = HookListener(
+            socketURL: paths.bridgeSocketURL,
+            registry: registry,
+            onStateChange: onSessionStateChange
+        )
         try await hookListener.start()
+        await registry.refresh(onStateChange: onSessionStateChange)
         log.log(.info, "hook socket listening")
 
         let shutdown = ShutdownCoordinator()

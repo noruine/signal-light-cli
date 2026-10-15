@@ -75,6 +75,16 @@ struct HookEventMapperTests {
         #expect(event.kind == .permissionRequest)
     }
 
+    @Test("Codex automatic permission modes do not wait for approval")
+    func codexAutomaticPermissionModes() throws {
+        for mode in ["bypassPermissions", "dontAsk"] {
+            let payload = try decodeCodex(
+                #"{"hook_event_name":"PermissionRequest","session_id":"c1","cwd":"/tmp","permission_mode":"\#(mode)"}"#
+            )
+            #expect(HookEventMapper.event(from: payload) == nil)
+        }
+    }
+
     @Test("Codex.app internal hooks are dropped")
     func codexAppNoise() throws {
         let payload = try decodeCodex(#"{"hook_event_name":"UserPromptSubmit","session_id":"c1","cwd":"/tmp","terminal_app":"Codex.app"}"#)

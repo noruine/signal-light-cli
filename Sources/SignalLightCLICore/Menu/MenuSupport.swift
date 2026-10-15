@@ -287,6 +287,7 @@ enum MenuLoop {
                 items: items.map(\.label),
                 terminal: terminal,
                 trail: page.map { [$0] } ?? [],
+                rootSuffix: page == nil ? "v\(AppVersion.current())" : nil,
                 context: context,
                 footerHint: terminal.keyBar([.move, .enter("确认"), escapeHint]),
                 refreshInterval: refreshInterval
@@ -315,7 +316,9 @@ enum MenuLoop {
             // Exit before pausing so the final output (e.g. uninstall's
             // summary) stays on screen and the program ends cleanly, with no
             // pointless "press Enter" on the way out.
-            if item.shouldExitAfter() {
+            let requestedMenuExit = CLIRuntimeContext.consumeMenuExitAfterAction()
+            let shouldExitAfterAction = item.shouldExitAfter() || requestedMenuExit
+            if shouldExitAfterAction {
                 MenuActionScreen.finishWithoutPause(footer: "已完成")
                 CLIRuntimeContext.menuTrail = []
                 return
