@@ -294,6 +294,13 @@ struct MenuChromeTests {
         #expect(lines[2] == "↑/↓ 移动 · Enter 确认 · Esc 取消")
     }
 
+    @Test("A confirmation can highlight yes by default")
+    func confirmFrameDefaultsToYes() {
+        let lines = Confirm.frame(plain, question: "升级？", yes: true)
+        #expect(lines[0].contains("[是]"))
+        #expect(lines[0].contains("否"))
+    }
+
     @Test("A picker frame reads breadcrumb, context, body, then the bar")
     func pickerFrameLayout() {
         var out: [String] = []

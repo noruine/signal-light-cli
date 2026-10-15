@@ -102,7 +102,7 @@ struct Upgrade: AsyncParsableCommand {
         }
 
         terminal.out("发现新代码 \(change)。")
-        guard Confirm.promptYesNo(terminal, "升级？") else {
+        guard Confirm.promptYesNo(terminal, "升级？", defaultAnswer: true) else {
             CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
