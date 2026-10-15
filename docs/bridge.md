@@ -1,11 +1,11 @@
 # Bridge：事件与会话状态
 
-`agent-hooks` 读取 Agent 发来的 hook JSON，将其映射为统一的 `HookEvent`，再通过 Unix socket
+`agent-hooks` 读取 Agent 发来的钩子 JSON，将其映射为统一的 `HookEvent`，再通过 Unix 套接字
 发送给守护进程。守护进程只处理统一事件，不解析 Claude Code 或 Codex 的原始格式。
 
 ## 事件传递
 
-每次 hook 建立一条 socket 连接并发送一行 JSON。守护进程应用事件后回一行
+每次钩子运行时建立一条 Unix 套接字连接，并发送一行 JSON。守护进程应用事件后回一行
 `{"ok":true}` 并关闭连接；收到回执表示事件已交给会话状态机处理。连接服务和等待回执各有两秒超时；
 服务不可用或超时都会静默退出。
 
@@ -29,9 +29,9 @@
 
 ## Agent 事件映射
 
-| Agent hook | 归一化事件 | 说明 |
+| Agent 钩子 | 归一化事件 | 说明 |
 | --- | --- | --- |
-| Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；signal-light 的 matcher 不处理 `compact`，映射层也会忽略该原因。 |
+| Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；signal-light 的匹配规则不处理 `compact`，映射层也会忽略该原因。 |
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
@@ -45,7 +45,7 @@
 | Codex `Stop` / `Interrupt` | `Stop` / `Interrupt` | 当前轮次结束或中断。 |
 | Codex `SessionEnd` | `SessionEnd` | 移除会话。 |
 
-Claude 子代理事件会忽略，避免把同一工作重复计入。Codex.app 没有 transcript 的内部事件也会忽略。
+Claude 子代理事件会忽略，避免把同一工作重复计入。Codex.app 没有会话记录的内部事件也会忽略。
 Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能继续当前轮次。
 
 ## 会话状态与灯光汇总
@@ -72,11 +72,11 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 | 等待回答 | 等待审批 | 等待审批 |
 | 运行中 | 结束或移除 | 运行中 |
 
-每个事件只更新它所属的会话，然后重新计算整盏灯的状态。因此，一个会话结束、变空闲或被移除时，
-如果还有其他活动会话，灯会显示它们中优先级最高的状态。
+每个事件只更新所属会话，然后重新计算整盏灯的状态。因此，一个会话结束、变为空闲或被移除时，
+如果还有其他活动会话，灯会显示其中优先级最高的状态。
 
 运行中状态在两小时没有新事件后过期；等待审批和等待回答在 24 小时没有新事件后过期。
-守护进程每 30 秒检查过期状态。过期会话转为空闲，空闲记录最多保留 24 小时，因此状态页的统计也会显示这些记录。会话状态只保存在守护进程内存中；服务重启后，已有会话不会自动恢复，需等 Agent 发来下一条 hook 事件。
+守护进程每 30 秒检查过期状态。过期会话转为空闲，空闲记录最多保留 24 小时，因此状态页的统计也会显示这些记录。会话状态只保存在守护进程内存中；服务重启后，已有会话不会自动恢复，需等 Agent 发来下一条钩子事件。
 
 ## 安装范围
 
@@ -87,5 +87,5 @@ Claude Code 安装 `SessionStart`、`UserPromptSubmit`、`PreToolUse`（仅匹�
 Codex 安装 `SessionStart`（startup、resume、clear、fork）、`UserPromptSubmit`、
 `PermissionRequest`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。
 
-安装和卸载只修改 signal-light 自己写入的 hook。单次子进程可通过
+安装和卸载只修改 signal-light 自己写入的钩子。单次子进程可通过
 `SIGNAL_LIGHT_SKIP_HOOKS=1` 跳过转发。

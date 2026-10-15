@@ -1,123 +1,81 @@
-# AGENTS
+# AGENTS.md
 
-Working agreement for coding agents in this repository.
+用户安装与使用说明见 [README.md](README.md)；钩子协议、事件映射和会话状态见
+[`docs/bridge.md`](docs/bridge.md)。同一说明只在所属文档维护，避免复制。
+项目说明文档统一使用中文；标识符、源码注释、日志和文档注释使用英语；命令与协议字段保留原文。
 
-## What this is
+## 项目结构
 
-`signal-light` drives a real ESP32-C3 traffic light over BLE: a CLI, a launchd
-daemon, and a hook forwarder that turns Claude Code / Codex session state into
-light colors. A neighbor's light may be in range — the safety rules below exist
-because an agent once paired with the wrong one.
+- `Sources/SignalLightKit`：BLE、灯效与设置、会话注册表、桥接协议和 Agent 钩子安装器；
+  不放 CLI 或界面代码。
+- `Sources/SignalLightCLICore`：命令、交互菜单和守护进程运行逻辑。`run` 是守护进程入口。
+- `Sources/SignalLightCLI`：供测试导入 CLI 核心的轻量 `@main` 入口。
+- `Sources/SignalLightHooks`：读取 Agent 钩子输入并转发事件的独立程序。
+- `Tests/SignalLightKitTests`：覆盖状态机、协议、映射和存储等核心行为。
+- `Tests/SignalLightCLITests`：覆盖 CLI 文案、交互布局和会话重试策略。
 
-## Documentation ownership
+## 开发与验证
 
-- `README.md` is for users: installation, commands, behavior and hardware notes.
-- This file is for contributors: code layout, invariants, validation and Git rules.
-- `docs/bridge.md` defines the hook socket protocol and phase mapping; update it
-  when either side changes.
-- Keep implementation details and contributor workflow out of the README. Keep
-  user setup and command explanations in the README instead of duplicating them
-  here.
-
-## Commands
-
-| Task | Command |
+| 任务 | 命令 |
 | --- | --- |
-| Build | `make build` |
-| Install / upgrade locally | `make install` (builds, then runs the CLI's `upgrade`) |
-| Test | `make test` |
-| Format / lint / copy check | `make format`, `make lint` (needs `swiftformat` and `swiftlint` from brew) |
+| 构建 | `make build` |
+| 安装或升级本机版本 | `make install` |
+| 运行测试 | `make test` |
+| 格式化 | `make format` |
+| 检查格式、SwiftLint 和 CLI 文案 | `make lint` |
 
-- Always build with `--build-system native`; the Makefile and scripts pass it
-  for you. CommandLineTools-only machines cannot initialize SwiftPM's default
-  engine without it.
-- `scripts/test.sh` adds the `Testing.framework` search path on
-  CommandLineTools machines; prefer it (or `make test`) over a bare
-  `swift test`.
+`make build` 和 `make test` 会通过脚本传入 `--build-system native`。Command Line Tools 环境下，
+优先使用 `make test` 或 `scripts/test.sh`；后者会补充 `Testing.framework` 搜索路径。
+格式和 lint 命令需要通过 Homebrew 安装 `swiftformat` 与 `swiftlint`。
 
-## Layout
+## 硬件与系统操作
 
-- `Sources/SignalLightKit` — the product core: BLE sessions, effects and
-  settings, the session registry, the hook protocol (`Bridge/`), agent
-  installers. No UI or app concerns belong here.
-- `Sources/SignalLightCLICore` — commands, interactive menu, daemon runner.
-  `run` is the daemon itself. `Sources/SignalLightCLI` is the thin `@main`
-  shell that exists only so tests can import the core.
-- `Sources/SignalLightHooks` — fire-and-forget forwarder, one file.
-- `Tests/SignalLightKitTests` — Swift Testing. Cover the key behavior (state
-  machine, protocol round trip, mappings, stores), never chase percentages.
-- `Tests/SignalLightCLITests` — the interactive chrome and copy wording (key
-  bars, `ScreenLayout` frames, the header segments) plus the session retry
-  policy.
+任何打开 BLE 的操作都会暂停用户正在运行的守护进程，并连接真实设备。
 
-## Hardware safety
+- 只有用户明确要求时才配对、改名、校准或刷写固件。附近可能有多盏灯时，
+  不要传入 `--first`；程序不会猜选设备。
+- 测试期间不要运行 `service stop`、`service restart` 或 `unpair`。
+- `make install`、`upgrade` 和 `sign` 会在守护进程运行时重启它；不要在自动检查或无关测试中调用。
+- 使用临时主目录测试时，仍会共享真实用户的 launchd 标签。隔离测试必须设置独立的
+  `SIGNAL_LIGHT_LAUNCHD_LABEL`；否则临时卸载或停止可能影响真实服务。
+  `SIGNAL_LIGHT_HOOKS_BINARY` 用于隔离钩子程序路径。
+- 若进程在操作中被强制终止，守护进程可能保持停止状态；恢复方式是运行 `signal-light service start`，并告知用户。
 
-Anything that opens BLE evicts the user's daemon (`DaemonPause`) and binds real
-hardware.
+硬件无关的端到端检查（要求守护进程已运行）：
 
-- Pair, rename, calibrate or flash only when the user asked for it. Never pass
-  `--first` when more than one light may be in range; the CLI refuses to guess.
-- Do not `service stop`, `service restart` or `unpair` while testing.
-- `make install`, `upgrade` and `sign` restart a running service by design; do not
-  invoke them from automated checks or unrelated testing.
-- A fake-`$HOME` run still shares the real per-user launchd label: set
-  `SIGNAL_LIGHT_LAUNCHD_LABEL` to a value of its own in sandboxed checks, or a
-  fake uninstall/stop boots out the real service. `SIGNAL_LIGHT_HOOKS_BINARY`
-  scopes the hooks binary for the same reason.
-- If a process is killed mid-operation the daemon can be left stopped: restore
-  it with `signal-light service start` and tell the user.
-- Hardware-free end-to-end check, with the daemon running:
+```bash
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"smoke","cwd":"/tmp"}' \
+  | .build/release/agent-hooks --source claude
+.build/release/signal-light status   # 状态应变为运行中
+echo '{"hook_event_name":"Stop","session_id":"smoke","cwd":"/tmp"}' \
+  | .build/release/agent-hooks --source claude
+```
 
-  ```bash
-  echo '{"hook_event_name":"UserPromptSubmit","session_id":"smoke","cwd":"/tmp"}' \
-    | .build/release/agent-hooks --source claude
-  .build/release/signal-light status   # bucket turns running
-  echo '{"hook_event_name":"Stop","session_id":"smoke","cwd":"/tmp"}' \
-    | .build/release/agent-hooks --source claude
-  ```
+## 实现约定
 
-## Conventions
+- 使用 Swift 6 严格并发模式。优先采用 actor 和值类型；使用 `@unchecked Sendable` 时，
+  必须说明其线程安全依据，例如锁、队列、actor 或线程安全的存储类型。
+- 面向用户的 CLI 文案使用自然中文。
+- CLI 文案遵守 `scripts/check-cli-copy.sh`：使用书面表达和统一按键名称
+  （Enter / Space / ↑/↓ / Esc）；操作标题带对应图标；只承诺确实会发生的行为。
+  结果用语统一为“已X”“X完成”“X失败”“无法X”“已取消X”。从确认问题返回时不额外输出；
+  取消正在执行的操作时输出一行后返回。只有确有结果需要阅读时才等待按键。
+- 交互页面统一通过 `ScreenLayout` 渲染，顺序为面包屑、空行、上下文、空行、正文、空行、
+  按键栏，且只有页脚使用弱化样式。菜单面包屑和按键栏分别通过
+  `Terminal.menuBreadcrumb`、`Terminal.keyBar` 生成；独立 CLI 命令保持普通终端输出，
+  不带菜单路径。页面只列出自己响应的按键。`make lint` 会检查过时的提示写法。
+- 会写文件、钥匙串或 launchd 的行为，必须来自用户输入的命令，或在执行前明确说明并取得用户确认。
+- 输出结果写到 stdout，进度和警告写到 stderr，确保管道输出可用。
+- 根目录 `VERSION` 使用 `0.Y.Z`。每次提交若改动已发布代码（`Sources/`、`Makefile`、
+  `Package.swift`），须在同一提交递增 Z。只有用户指定里程碑时才递增 Y，并将 Z 归零。
+  文档、测试和工具改动不调整版本号。版本号只用于显示；变更检测比较源码戳。
+  项目不创建发行版或标签。
 
-- Swift 6 language mode with strict concurrency. Prefer actors and value
-  types; `@unchecked Sendable` needs a stated reason — a named lock, queue
-  or actor, or a stored type that is itself thread-safe.
-- User-facing copy is standard, natural Chinese; the 了 particle is banned
-  outside 不了 / 为了 / 除了, and `scripts/check-cli-copy.sh` (part of
-  `make lint`) pins the rest: written register over spoken, the one key
-  vocabulary (Enter / Space / ↑/↓ / Esc), operation headlines that carry
-  their glyph, and no promises of actions that cannot happen. One vocabulary
-  for results: 已X for a finished action, X完成 for a finished flow, X失败 for a
-  failed one, 无法X for an environment limit, 已取消X for a cancel. Backing
-  out of a yes/no question says nothing — the answer is the statement; a
-  cancel that interrupts running work says its one line and returns. Only
-  output worth reading asks for a keypress.
-- Every interactive screen renders through `ScreenLayout` — breadcrumb,
-  blank, context, blank, body, blank, key bar, only the footer dimmed —
-  so spacing and color roles cannot drift between screens. The breadcrumb
-  is menu chrome: bare CLI runs stay Unix-plain and pass no trail. `make
-  lint` bans stale hint forms.
-- Nothing touches the machine silently: an action that writes files, the
-  keychain, or launchd is either a command the user typed or one they
-  confirmed first, with the consequences said out loud.
-- Every interactive screen shares the same chrome — its breadcrumb and key
-  bar come from `Terminal.menuBreadcrumb` / `Terminal.keyBar`; only the
-  body changes, and a page lists just the key hints it answers to.
-- `VERSION` at the repo root is the human version, `0.Y.Z`: the last digit
-  is a build counter — every commit that touches shipped code (`Sources/`,
-  `Makefile`, `Package.swift`) increments it in the same commit. The middle
-  digit moves only when the user calls a milestone, resetting the last
-  digit to zero. Docs, tests and tooling leave it alone; no releases or
-  tags, by design. Display only: change detection compares the source
-  stamp, not the version.
-- Results go to stdout, progress and warnings to stderr, so pipes stay clean.
+## Git 提交约定
 
-## Git
-
-- Every round that changes files ends with a commit on the branch you are
-  working in; one coherent change per commit.
-- Subject: `type(scope): what and why`, ≤72 characters, lowercase except
-  proper nouns and acronyms (`macOS`, `CLI`, `Bluetooth`).
-- Body only when the diff cannot carry the why: `-` bullets, one per change,
-  ≤72 characters each, stating the why — never a changelog, a file recap or a
-  list of identifiers.
-- No attribution lines. Never push, tag or open pull requests unless asked.
+- 每轮改动文件后，在当前分支创建一个只包含同一主题的提交。
+- 提交标题格式为 `type(scope): what and why`，不超过 72 字符；除专名和缩写
+  （如 `macOS`、`CLI`、`Bluetooth`）外使用小写。类型限于 `feat`、`fix`、`docs`、
+  `chore`、`refactor`、`test`、`style`。
+- 仅当差异本身不足以说明原因时添加正文。正文用 `-` 列表说明原因，不写文件清单或改动流水账；每行不超过 72 字符。
+- 不添加署名行。未经用户要求，不推送、打标签或创建合并请求。

@@ -18,19 +18,17 @@
 make install
 ```
 
-首次运行会安装程序，之后运行同一命令即可更新。更新会保留设备配对、灯效和开机启动设置；
-如果后台服务正在运行，安装程序会重启它以加载新版本。重启后，进行中的 Agent 会话状态会清空，
-等 Agent 发来下一条事件后再恢复显示。
-已安装的程序也可运行 `signal-light upgrade` 检查安装时记录的源码仓库；从仓库更新时运行 `make install`。
+首次运行会安装程序，之后可再次运行同一命令更新。更新会保留设备配对、灯效和开机启动设置；
+服务运行时会自动重启。重启后，会话状态要等 Agent 的下一条事件到达后才恢复。
+已安装的程序也可运行 `signal-light upgrade` 更新。
 
 ## 开始使用
 
-运行 `signal-light` 打开交互菜单，按菜单提示完成设备配对、启动服务和接入 Agent。
-Codex 接入后，在 Codex 中运行 `/hooks` 并确认信任，钩子才会生效。
+运行 `signal-light` 打开交互菜单，按提示配对设备、启动服务并接入 Agent。Codex 接入后，
+还需在 Codex 中运行 `/hooks` 并确认信任，钩子才会生效。
 
-服务默认不会在登录时自动启动。需要时，在菜单的「服务」中开启开机启动。
-
-- 配对时确认设备名称。附近有多盏灯时，请按名称或 UUID 选择；`--first` 只会在找到唯一设备时自动选择。
+服务默认不会在登录时自动启动；可在菜单的「服务」中开启开机启动。配对时请确认设备名称；
+附近有多盏灯时，按名称或 UUID 选择。`--first` 仅在找到唯一设备时自动选择。
 
 需要直接执行命令时：
 
@@ -40,11 +38,11 @@ Codex 接入后，在 Codex 中运行 `/hooks` 并确认信任，钩子才会生
 | 管理后台服务 | `signal-light service start`、`signal-light service stop`、`signal-light service restart` |
 | 配对和校准设备 | `signal-light pair`、`signal-light unpair`、`signal-light calibrate` |
 | 管理灯效和亮度 | `signal-light config` |
-| 管理 Agent hooks | `signal-light hooks install`、`signal-light hooks status`、`signal-light hooks uninstall` |
+| 管理 Agent 钩子 | `signal-light hooks install`、`signal-light hooks status`、`signal-light hooks uninstall` |
 | 检查和更新固件 | `signal-light firmware check`、`signal-light firmware update` |
 | 更新或卸载程序 | `signal-light upgrade`、`signal-light uninstall` |
 
-完整命令说明见 `signal-light --help`，子命令帮助见 `signal-light <命令> --help`。
+完整命令说明见 `signal-light --help`；子命令帮助见 `signal-light <命令> --help`。
 
 ## 灯光状态
 
@@ -59,23 +57,17 @@ Codex 接入后，在 Codex 中运行 `/hooks` 并确认信任，钩子才会生
 运行 `signal-light status` 可查看各状态的会话数；交互菜单中的状态页会持续刷新。
 可在交互菜单中调整灯效和亮度。关闭灯光不会停止后台服务。
 
-hooks 只转发会话状态，不处理审批或回答；连接服务和等待回执各有两秒超时，超时后静默退出。
-安装和卸载只修改 signal-light 自己添加的配置。卸载程序时 hooks 默认保留；需要一起移除时，使用
+钩子只转发会话状态，不处理审批或回答；连接服务和等待回执各有两秒超时，超时后静默退出。
+安装和卸载只修改 signal-light 自己添加的配置。卸载时钩子默认保留；如需一并移除，运行
 `signal-light uninstall --yes --remove-hooks`。
 
-事件映射、多会话状态和过期规则见 [Bridge 文档](docs/bridge.md)。
+事件映射、多会话状态和过期规则见[桥接协议文档](docs/bridge.md)。
 
 ## 固件
 
 运行 `signal-light firmware check` 检查固件，运行 `signal-light firmware update` 更新。
 默认从 [open-vibe-island](https://github.com/itdragons/open-vibe-island) 的 `wg` 分支获取固件清单；
 也可用 `--file` 指定本地固件文件。更新期间服务会暂时停止，请勿断电或退出程序。
-
-## 问题排查
-
-- 灯没有响应：运行 `signal-light status`、`signal-light doctor` 和 `signal-light logs` 检查连接与服务。
-- Agent 状态没有显示：运行 `signal-light hooks status`；Codex 还需在 `/hooks` 中确认信任。
-- 单次运行中跳过 hooks：设置环境变量 `SIGNAL_LIGHT_SKIP_HOOKS=1`。
 
 ## 文件位置
 
@@ -84,7 +76,6 @@ hooks 只转发会话状态，不处理审批或回答；连接服务和等待�
 | 程序数据、配对信息、设置和日志 | `~/.signal-light/` |
 | 命令入口 | `~/.local/bin/signal-light` |
 | 后台服务配置 | `~/Library/LaunchAgents/app.signal-light.daemon.plist` |
-| Agent 与服务之间的 socket | `~/.signal-light/bridge.sock` |
 
 卸载只删除 signal-light 创建的文件和链接。
 
