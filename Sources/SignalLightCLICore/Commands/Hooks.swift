@@ -213,6 +213,22 @@ enum HooksAgentSupport {
         }
     }
 
+    static func synchronizeManagedInstallations(paths: SignalLightDaemonPaths, terminal: Terminal) {
+        for agent in HookAgent.allCases {
+            do {
+                guard try status(agent, paths: paths).managedHooksPresent else { continue }
+                terminal.progress("    • 同步 \(agent.displayName) hooks…")
+                _ = try install(agent, paths: paths)
+                terminal.progress("    • \(agent.displayName) hooks 已同步")
+            } catch {
+                terminal.warn(
+                    "同步 \(agent.displayName) hooks 失败：\(error.localizedDescription)。"
+                        + "可运行 signal-light hooks install \(agent.rawValue) 重试。"
+                )
+            }
+        }
+    }
+
     static func uninstall(_ agent: HookAgent, paths: SignalLightDaemonPaths) throws -> Report {
         switch agent {
         case .claude:

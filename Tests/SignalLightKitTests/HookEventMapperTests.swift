@@ -14,6 +14,16 @@ struct HookEventMapperTests {
         #expect(event.isQuestion == false)
     }
 
+    @Test("Claude permission denials resume the session")
+    func claudePermissionDenied() throws {
+        let payload = try decodeClaude(
+            #"{"hook_event_name":"PermissionDenied","session_id":"s1","cwd":"/tmp"}"#
+        )
+        let event = try #require(HookEventMapper.event(from: payload))
+
+        #expect(event.kind == .postToolUse)
+    }
+
     @Test("Claude questions map to answers")
     func claudeQuestion() throws {
         let payload = try decodeClaude(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/tmp","tool_name":"AskUserQuestion"}"#)
@@ -73,6 +83,14 @@ struct HookEventMapperTests {
         let event = try #require(HookEventMapper.event(from: payload))
         #expect(event.source == .codex)
         #expect(event.kind == .permissionRequest)
+    }
+
+    @Test("Codex tool start marks approval as resolved")
+    func codexPreToolUse() throws {
+        let payload = try decodeCodex(#"{"hook_event_name":"PreToolUse","session_id":"c1","cwd":"/tmp"}"#)
+        let event = try #require(HookEventMapper.event(from: payload))
+
+        #expect(event.kind == .preToolUse)
     }
 
     @Test("Codex compaction does not reset the session to idle")

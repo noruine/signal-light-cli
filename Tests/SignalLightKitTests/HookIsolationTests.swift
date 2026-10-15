@@ -290,7 +290,9 @@ struct HookIsolationTests {
         #expect(ClaudeHookInstaller.managedEventNames.contains("PreToolUse"))
         #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUse"))
         #expect(ClaudeHookInstaller.managedEventNames.contains("PostToolUseFailure"))
+        #expect(ClaudeHookInstaller.managedEventNames.contains("PermissionDenied"))
         #expect(CodexHookInstaller.managedEventNames.contains("PostToolUse"))
+        #expect(CodexHookInstaller.managedEventNames.contains("PreToolUse"))
 
         let installed = try ClaudeHookInstaller.installSettingsJSON(
             existingData: nil,

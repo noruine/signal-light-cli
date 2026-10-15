@@ -34,6 +34,7 @@
 | Claude `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 开始或恢复会话；signal-light 的匹配规则不处理 `compact`，映射层也会忽略该原因。 |
 | Claude `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Claude `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 等待审批。 |
+| Claude `PermissionDenied` | `PostToolUse` | 自动模式拒绝工具后，清除等待审批并继续显示工作中。 |
 | Claude `PreToolUse`（`AskUserQuestion`） | `PermissionRequest`，`isQuestion: true` | 等待用户回答。其他 `PreToolUse` 忽略。 |
 | Claude `PostToolUse` / `PostToolUseFailure` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Claude `Stop` / `StopFailure` | `Stop` / `StopFailure` | 当前轮次结束。 |
@@ -80,11 +81,14 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 ## 安装范围
 
 Claude Code 安装 `SessionStart`、`UserPromptSubmit`、`PreToolUse`（仅匹配
-`AskUserQuestion`）、`PermissionRequest`、`PostToolUse`、`PostToolUseFailure`、`Stop`、
+`AskUserQuestion`）、`PermissionRequest`、`PermissionDenied`、`PostToolUse`、`PostToolUseFailure`、`Stop`、
 `StopFailure` 和 `SessionEnd`。
 
 Codex 安装 `SessionStart`（startup、resume、clear、fork）、`UserPromptSubmit`、
-`PermissionRequest`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。
+`PermissionRequest`、`PreToolUse`、`PostToolUse`、`Stop`、`SessionEnd` 和 `Interrupt`。
+`PreToolUse` 表示工具已获准并开始执行，会话立即回到工作中，不必等工具完成。
+
+运行 `make install` 更新时，只同步已接入 Agent 的 signal-light hooks；未接入的 Agent 不会自动添加，其他 hooks 保持不变。
 
 安装和卸载只修改 signal-light 自己写入的钩子。单次子进程可通过
 `SIGNAL_LIGHT_SKIP_HOOKS=1` 跳过转发。

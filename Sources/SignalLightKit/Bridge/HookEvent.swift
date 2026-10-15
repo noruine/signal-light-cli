@@ -16,6 +16,7 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case sessionStart = "SessionStart"
         case userPromptSubmit = "UserPromptSubmit"
         case permissionRequest = "PermissionRequest"
+        case preToolUse = "PreToolUse"
         case postToolUse = "PostToolUse"
         case stop = "Stop"
         case stopFailure = "StopFailure"

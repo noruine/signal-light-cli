@@ -55,6 +55,7 @@ public enum ClaudeHookInstaller {
         ("UserPromptSubmit", nil, nil),
         ("PreToolUse", "AskUserQuestion", managedTimeout),
         ("PermissionRequest", "*", managedTimeout),
+        ("PermissionDenied", nil, managedTimeout),
         ("PostToolUse", nil, managedTimeout),
         ("PostToolUseFailure", nil, managedTimeout),
         ("Stop", nil, nil),

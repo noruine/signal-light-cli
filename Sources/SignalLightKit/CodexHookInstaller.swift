@@ -87,6 +87,9 @@ public enum CodexHookInstaller {
         ("SessionStart", "startup|resume|clear|fork", managedTimeout),
         ("UserPromptSubmit", nil, managedTimeout),
         ("PermissionRequest", nil, managedInteractiveTimeout),
+        // A tool starting means an approval was resolved; publish work
+        // immediately instead of waiting for the tool to finish.
+        ("PreToolUse", nil, managedTimeout),
         ("PostToolUse", nil, managedTimeout),
         ("Stop", nil, managedTimeout),
         // Codex caps these at 3 seconds and silently kills slower hooks, so

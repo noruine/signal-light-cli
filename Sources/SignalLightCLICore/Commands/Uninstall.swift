@@ -4,16 +4,13 @@ import SignalLightKit
 
 struct Uninstall: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "停止服务并删除 signal-light 的全部文件（程序、配置、日志）。"
+        abstract: "停止服务并清理 signal-light 的程序、数据和 Agent hooks。"
     )
 
     @OptionGroup var globals: GlobalOptions
 
     @Flag(name: [.customShort("y"), .long], help: "跳过确认提示（非交互环境下必须传入）。")
     var yes: Bool = false
-
-    @Flag(name: .customLong("remove-hooks"), help: "连 Claude Code / Codex 里的 hooks 一起移除（非交互环境只能靠它指定）。")
-    var removeHooks: Bool = false
 
     func run() async throws {
         let terminal = globals.makeTerminal()
@@ -24,9 +21,8 @@ struct Uninstall: AsyncParsableCommand {
             CLIRuntimeContext.markCommandCancelled(.silentCancel)
             return
         }
-        let alsoRemoveHooks = confirmHooksRemoval(terminal: terminal)
-
         terminal.progress("\(terminal.emoji(CLIGlyph.cleanup))正在卸载并清理…")
+        var cleanupHadFailures = false
 
         // Wait for the daemon to fully exit before deleting its files — a
         // still-shutting-down daemon writes state.json/log on its way out,
@@ -34,7 +30,12 @@ struct Uninstall: AsyncParsableCommand {
         // clean uninstall into a phantom "residue detected" failure.
         let control = LaunchAgentControl(paths: paths)
         let serviceWasLoaded = control.jobInfo().isLoaded
-        try await control.bootoutAndWait()
+        do {
+            try await control.bootoutAndWait()
+        } catch {
+            cleanupHadFailures = true
+            terminal.warn("停止 launchd 服务失败：\(error.localizedDescription)。继续清理其他内容。")
+        }
         if serviceWasLoaded {
             terminal.progress("    • 停止 launchd 服务")
         }
@@ -54,9 +55,8 @@ struct Uninstall: AsyncParsableCommand {
             terminal.progress("    • 移除固定签名身份（登录钥匙串里的\(identityParts.joined(separator: "、"))）")
         }
 
-        if alsoRemoveHooks {
-            removeHooksFromAgents(terminal: terminal, paths: paths)
-        }
+        let hooksRemoval = removeHooksFromAgents(terminal: terminal, paths: paths)
+        cleanupHadFailures = hooksRemoval.didFail || cleanupHadFailures
 
         let report = try DaemonCleanup.perform(paths: paths, socketIsInactive: { !SocketProbe.isActive($0) })
 
@@ -85,9 +85,8 @@ struct Uninstall: AsyncParsableCommand {
         if paths.ownedSockets.contains(where: { removedPaths.contains($0.path) }) {
             terminal.progress("    • 清理运行时 socket")
         }
-        // A socket with a live listener (another bridge or program) is
-        // deliberately left alone — that's somebody else's to own while it
-        // runs, and it must not make this uninstall look unfinished.
+        // A socket with a live listener is deliberately left alone. The
+        // liveness guard below identifies it as in use instead of unlinking it.
         for socket in report.liveSockets {
             terminal.progress("    • 保留 socket（别的程序在用）：\(PathText.abbreviated(socket))")
         }
@@ -98,12 +97,14 @@ struct Uninstall: AsyncParsableCommand {
             terminal.progress("    • 保留 \(PathText.abbreviated(entry))（不是本工具建的，没动）")
         }
 
-        guard report.remaining.isEmpty else {
+        if !report.remaining.isEmpty {
+            cleanupHadFailures = true
             let list = report.remaining.map { "  - \($0.path)" }.joined(separator: "\n")
-            throw CLIError("卸载后仍检测到以下残留，请手动检查：\n\(list)", exitCode: .software)
+            terminal.warn("以下 signal-light 文件未能清理：\n\(list)")
         }
-
-        if report.removedFiles.isEmpty, report.removedDirs.isEmpty {
+        if cleanupHadFailures {
+            terminal.out("卸载流程已完成；部分内容未能清理，请检查上方提示。")
+        } else if report.removedFiles.isEmpty, report.removedDirs.isEmpty, !hooksRemoval.didRemove {
             terminal.out("这台机器上没有安装 signal-light，没有可卸载的内容。")
         } else {
             terminal.out("\(terminal.emoji(CLIGlyph.success))\(terminal.success("卸载完成，没留什么文件。"))")
@@ -117,24 +118,6 @@ struct Uninstall: AsyncParsableCommand {
         if !keptInsideCliRoot, FileManager.default.fileExists(atPath: paths.cliRootDir.path) {
             terminal.warn("\(PathText.abbreviated(paths.cliRootDir)) 里还有不是本工具建的文件，已保留。")
         }
-        if !alsoRemoveHooks, !CLIRuntimeContext.isMenuSession {
-            terminal.out("    未处理 Agent 的 hooks（Claude Code / Codex 配置保持原样）。")
-        }
-    }
-
-    /// The signal light's own files are always removed (that's the whole
-    /// point of `uninstall`). Whether to also clean up the *agent-side* hook
-    /// entries (`~/.claude/settings.json`, `~/.codex/config.toml`) is a
-    /// separate, independent question — those configs are useful even
-    /// without the signal light installed — so it gets its own explicit
-    /// answer: an interactive prompt, or `--remove-hooks` for scripts.
-    /// Non-interactively without the flag, hooks are never touched: there is
-    /// no safe default to guess here, only an explicit one to require.
-    private func confirmHooksRemoval(terminal: Terminal) -> Bool {
-        if removeHooks { return true }
-        guard terminal.isInteractive else { return false }
-        terminal.out("Claude Code / Codex 里的 hooks 也会一起卸掉。")
-        return Confirm.promptYesNo(terminal, "一起卸掉？", defaultAnswer: false)
     }
 
     /// Best-effort: a failure removing one agent's hooks (e.g. permissions)
@@ -142,17 +125,25 @@ struct Uninstall: AsyncParsableCommand {
     /// confirmed as destructive and expects to complete. Each line reports
     /// what actually happened — a never-installed agent says so instead of
     /// claiming a removal.
-    private func removeHooksFromAgents(terminal: Terminal, paths: SignalLightDaemonPaths) {
+    private func removeHooksFromAgents(
+        terminal: Terminal,
+        paths: SignalLightDaemonPaths
+    ) -> (didRemove: Bool, didFail: Bool) {
+        var didRemove = false
+        var didFail = false
         for agent in HookAgent.allCases {
             do {
                 let report = try HooksAgentSupport.uninstall(agent, paths: paths)
+                didRemove = report.didRemove || didRemove
                 terminal.progress(report.didRemove
                     ? "    • \(agent.displayName)：已移除 hooks 配置"
                     : "    • \(agent.displayName)：没有要移除的 hooks")
             } catch {
+                didFail = true
                 terminal.warn("移除 \(agent.displayName) 的 hooks 配置失败：\(error)")
             }
         }
+        return (didRemove, didFail)
     }
 
     /// Returns false when the user backs out; the caller then stops quietly

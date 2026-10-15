@@ -21,6 +21,7 @@ public enum HookEventMapper {
             guard payload.toolName == "AskUserQuestion" else { return nil }
             kind = .permissionRequest
         case .permissionRequest: kind = .permissionRequest
+        case .permissionDenied: kind = .postToolUse
         case .postToolUse, .postToolUseFailure: kind = .postToolUse
         case .stop: kind = .stop
         case .stopFailure: kind = .stopFailure
@@ -54,11 +55,11 @@ public enum HookEventMapper {
                 return nil
             }
             kind = .permissionRequest
+        case .preToolUse: kind = .preToolUse
         case .postToolUse: kind = .postToolUse
         case .stop: kind = .stop
         case .sessionEnd: kind = .sessionEnd
         case .interrupt: kind = .interrupt
-        default: return nil
         }
 
         return HookEvent(source: .codex, kind: kind, sessionID: payload.sessionID)

@@ -29,6 +29,7 @@ enum Installation {
         try installBinary(paths: paths, terminal: terminal)
         try linkIntoPath(paths: paths, terminal: terminal)
         installHooksBinary(paths: paths, terminal: terminal)
+        HooksAgentSupport.synchronizeManagedInstallations(paths: paths, terminal: terminal)
         signInstalledBinaries(paths: paths, terminal: terminal)
         restartRunningService(paths: paths, terminal: terminal)
         recordBuildIdentity(paths: paths, terminal: terminal)

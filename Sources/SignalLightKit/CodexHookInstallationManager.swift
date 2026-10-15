@@ -63,10 +63,10 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let configContents = try readTextIfPresent(configURL) ?? ""
         let hooksData = try readIfPresent(hooksURL)
         let manifest = loadManifest(at: manifestURL)
-        let managedHooksPresent = ((try? CodexHookInstaller.uninstallHooksJSON(
+        let managedHooksPresent = try CodexHookInstaller.uninstallHooksJSON(
             existingData: hooksData,
             managedCommand: resolvedManagedCommand(manifest: manifest)
-        ))?.changed) == true
+        ).changed
 
         return CodexHookInstallationStatus(
             codexDirectory: codexDirectory,

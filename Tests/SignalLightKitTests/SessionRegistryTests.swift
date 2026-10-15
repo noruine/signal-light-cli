@@ -57,6 +57,15 @@ struct SessionRegistryTests {
         #expect(await registry.snapshot()["claude:running"]?.phase == .running)
     }
 
+    @Test("Tool start clears a pending Codex approval before execution completes")
+    func toolStartClearsApproval() async {
+        let registry = SessionRegistry()
+        _ = await registry.apply(event(.permissionRequest, source: .codex))
+
+        #expect(await registry.apply(event(.preToolUse, source: .codex)) == .running)
+        #expect(await registry.snapshot()["codex:s1"]?.phase == .running)
+    }
+
     @Test("A new prompt clears a pending question in its session")
     func newPromptClearsQuestion() async {
         let registry = SessionRegistry()

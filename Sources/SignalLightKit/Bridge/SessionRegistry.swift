@@ -118,7 +118,7 @@ public actor SessionRegistry {
                 sessions[key] = session
             }
 
-        case .userPromptSubmit, .postToolUse:
+        case .userPromptSubmit, .preToolUse, .postToolUse:
             update(key, source: event.source, sessionID: event.sessionID, at: timestamp) { session in
                 session.phase = .running
             }

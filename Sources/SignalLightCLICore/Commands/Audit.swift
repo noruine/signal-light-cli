@@ -54,30 +54,34 @@ struct Audit: AsyncParsableCommand {
         // the service is down, it is somebody else's listener.
         let daemonIsRunning = jobInfo.isLoaded && jobInfo.pid != nil
 
-        for path in paths.ownedFiles + paths.ownedSockets {
+        let directories = paths.pruneDirsIfEmpty
+        let directoryPaths = Set(directories.map(\.standardizedFileURL.path))
+        let entries = (paths.ownedFiles + paths.ownedSockets + directories)
+            .sorted { $0.standardizedFileURL.path < $1.standardizedFileURL.path }
+
+        for path in entries {
+            let pathString = path.standardizedFileURL.path
+            let depth = directoryPaths.filter { pathString.hasPrefix($0 + "/") }.count
+            let indent = String(repeating: "  ", count: depth)
+
             // A socket with a live listener is not this CLI's residue —
             // cleanup correctly leaves it alone.
             if liveSocketPaths.contains(path.path) {
                 let holder = daemonIsRunning ? "后台服务在用" : "正在被别的程序使用"
-                terminal.out("● \(PathText.abbreviated(path))（\(holder)）")
+                terminal.out("\(indent)● \(PathText.abbreviated(path))（\(holder)）")
                 continue
             }
             // An inventory path somebody else occupies (a directory where one
             // of our files should be, a repointed PATH link): still there, but
             // not ours to remove.
             if keptForeignPaths.contains(path.path) {
-                terminal.out("● \(PathText.abbreviated(path))（不是本工具建的）")
+                terminal.out("\(indent)● \(PathText.abbreviated(path))（不是本工具建的）")
                 continue
             }
-            let exists = remainingPaths.contains(path.path)
-            terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(path))")
-        }
-
-        // Directories read like everything else — on disk or not. Whether a
-        // survivor is removable junk is uninstall's question, not this one's.
-        for dir in paths.pruneDirsIfEmpty {
-            let exists = FileManager.default.fileExists(atPath: dir.path)
-            terminal.out("\(dot(exists, terminal: terminal)) \(PathText.abbreviated(dir))")
+            let exists = directoryPaths.contains(pathString)
+                ? FileManager.default.fileExists(atPath: path.path)
+                : remainingPaths.contains(path.path)
+            terminal.out("\(indent)\(dot(exists, terminal: terminal)) \(PathText.abbreviated(path))")
         }
 
         let jobLabel = "launchd job (\(SignalLightDaemonPaths.launchAgentLabel))"
