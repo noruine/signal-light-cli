@@ -7,5 +7,4 @@ public enum SignalLightConfiguration {
     public static let launchAgentLabel = "app.signal-light.daemon"
     public static let launchAgentLabelEnvironmentKey = "SIGNAL_LIGHT_LAUNCHD_LABEL"
     public static let hooksBinaryEnvironmentKey = "SIGNAL_LIGHT_HOOKS_BINARY"
-    public static let skipHooksEnvironmentKey = "SIGNAL_LIGHT_SKIP_HOOKS"
 }

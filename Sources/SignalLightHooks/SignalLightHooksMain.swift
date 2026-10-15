@@ -10,9 +10,6 @@ import SignalLightKit
 @main
 enum SignalLightHooksMain {
     static func main() {
-        guard !HookSkipConfiguration.shouldSkipHooks(environment: ProcessInfo.processInfo.environment) else {
-            return
-        }
         let input = FileHandle.standardInput.readDataToEndOfFile()
         guard !input.isEmpty else { return }
         guard let event = event(from: input) else { return }

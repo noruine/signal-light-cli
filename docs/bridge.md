@@ -42,6 +42,7 @@
 | Codex `SessionStart`（startup、resume、clear、fork） | `SessionStart` | 初始化、恢复、清空或分叉会话时触发；映射层忽略 `compact`。 |
 | Codex `UserPromptSubmit` | `UserPromptSubmit` | 开始处理新提示。 |
 | Codex `PermissionRequest` | `PermissionRequest`，`isQuestion: false` | 需要人工审批时等待审批；自动批准或不提示模式忽略。 |
+| Codex `PreToolUse` | `PreToolUse` | 工具开始执行，清除等待审批并显示工作中。 |
 | Codex `PostToolUse` | `PostToolUse` | 工具结束后继续记为工作中。 |
 | Codex `Stop` / `Interrupt` | `Stop` / `Interrupt` | 当前轮次结束或中断。 |
 | Codex `SessionEnd` | `SessionEnd` | 移除会话。 |
@@ -56,7 +57,7 @@ Claude 和 Codex 的 `compact` 都不会作为新会话处理；压缩后可能�
 | 归一化事件 | 会话状态 |
 | --- | --- |
 | `SessionStart` | 空闲 |
-| `UserPromptSubmit` / `PostToolUse` | 工作中 |
+| `UserPromptSubmit` / `PreToolUse` / `PostToolUse` | 工作中 |
 | `PermissionRequest`，`isQuestion: false` | 等待审批 |
 | `PermissionRequest`，`isQuestion: true` | 等待回答 |
 | `Stop` / `StopFailure` / `Interrupt` | 空闲 |
@@ -90,5 +91,4 @@ Codex 安装 `SessionStart`（startup、resume、clear、fork）、`UserPromptSu
 
 运行 `make install` 更新时，只同步已接入 Agent 的 signal-light hooks；未接入的 Agent 不会自动添加，其他 hooks 保持不变。
 
-安装和卸载只修改 signal-light 自己写入的钩子。单次子进程可通过
-`SIGNAL_LIGHT_SKIP_HOOKS=1` 跳过转发。
+安装和卸载只修改 signal-light 自己写入的钩子。
