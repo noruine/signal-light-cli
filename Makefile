@@ -6,7 +6,7 @@
 .DEFAULT_GOAL := build
 CONFIGURATION ?= release
 
-.PHONY: build install test lint format clean help
+.PHONY: build install test lint format version clean help
 
 build:  ## Build both executables ($(CONFIGURATION))
 	swift build --build-system native -c $(CONFIGURATION)
@@ -30,6 +30,9 @@ lint:  ## Format check, lint rules, CLI copy check
 format:  ## Rewrite sources with swiftformat
 	@command -v swiftformat >/dev/null || { echo "swiftformat missing: brew install swiftformat"; exit 1; }
 	swiftformat .
+
+version:  ## Check and update VERSION for changed product code
+	scripts/version.sh $(if $(LEVEL),$(LEVEL),patch)
 
 clean:  ## Remove build products
 	rm -rf .build

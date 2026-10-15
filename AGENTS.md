@@ -23,10 +23,13 @@
 | 运行测试 | `make test` |
 | 格式化 | `make format` |
 | 检查格式、SwiftLint 和 CLI 文案 | `make lint` |
+| 检查并更新版本号 | `make version` |
 
 `make build` 和 `make test` 会通过脚本传入 `--build-system native`。Command Line Tools 环境下，
 优先使用 `make test` 或 `scripts/test.sh`；后者会补充 `Testing.framework` 搜索路径。
 格式和 lint 命令需要通过 Homebrew 安装 `swiftformat` 与 `swiftlint`。
+每次提交前运行 `make version`。发布代码变更默认递增末位；里程碑版本需显式使用
+`make version LEVEL=minor` 或 `make version LEVEL=major`。脚本不推断改动的语义级别。
 
 ## 硬件与系统操作
 
@@ -66,7 +69,5 @@ echo '{"hook_event_name":"Stop","session_id":"smoke","cwd":"/tmp"}' \
   不带菜单路径。页面只列出自己响应的按键。`make lint` 会检查过时的提示写法。
 - 会写文件、钥匙串或 launchd 的行为，必须来自用户输入的命令，或在执行前明确说明并取得用户确认。
 - 输出结果写到 stdout，进度和警告写到 stderr，确保管道输出可用。
-- 根目录 `VERSION` 使用 `0.Y.Z`。每次提交若改动已发布代码（`Sources/`、`Makefile`、
-  `Package.swift`），须在同一提交递增 Z。只有用户指定里程碑时才递增 Y，并将 Z 归零。
-  文档、测试和工具改动不调整版本号。版本号只用于显示；变更检测比较源码戳。
+- 根目录 `VERSION` 使用 `0.Y.Z`。版本号只用于显示；变更检测比较源码戳。
   项目不创建发行版或标签。
